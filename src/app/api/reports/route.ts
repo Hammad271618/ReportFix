@@ -9,6 +9,7 @@ import {
 import { resolveCampusLocation } from "@/lib/campus-registry";
 import {
   adjustTrustScore,
+  hasMedicalIssueSignal,
   isPersonalNonFacilityIssue,
   preScreenRawText,
   sanitizePublicSummary,
@@ -179,6 +180,16 @@ export async function POST(req: Request) {
       }
     }
 
+    if (
+      !safetyVerified &&
+      !isConfidential &&
+      (item.problemCategory === "medical_emergency" || item.hazardType === "medical") &&
+      hasMedicalIssueSignal(text)
+    ) {
+      safetyVerified = true;
+      hazardType = "medical";
+    }
+
     const locRes = resolveCampusLocation(
       item.rawLocationMention,
       item.matchedLocationId
@@ -347,8 +358,8 @@ export async function POST(req: Request) {
         cleanSummary: isInjectionOnly
           ? "Prompt-injection submission rejected (no valid campus issue found)."
           : isPersonalRejected
-          ? "Personal non-facility issues are not accepted. Only fixable campus facility issues or harassment/bullying reports can be submitted."
-          : "No actionable campus issue was found in this submission. Only fixable facility issues or harassment/bullying reports are accepted.",
+          ? "Personal non-facility issues are not accepted. Only fixable campus facility issues, medical issues, or harassment/bullying reports can be submitted."
+          : "No actionable campus issue was found in this submission. Only fixable facility issues, medical issues, or harassment/bullying reports are accepted.",
         aiExtracted: {
           category: "other",
           factualImpact: "minor",
@@ -374,7 +385,7 @@ export async function POST(req: Request) {
           message: injectionPenalized
             ? "Prompt-injection attempt blocked (-15 trust)."
             : isPersonalRejected
-            ? "Personal issue rejected — only fixable facility issues or harassment/bullying reports are accepted."
+            ? "Personal issue rejected — only fixable facility issues, medical issues, or harassment/bullying reports are accepted."
             : "No actionable campus issue found in submission.",
         },
       };

@@ -162,10 +162,58 @@ const SAFETY_KEYWORDS: string[] = [
   "nangi taar",
   "ceiling collapse",
   "chemical spill",
+  "medical emergency",
+  "medical issue",
+  "medical help",
+  "breathing problem",
+  "breathing difficulty",
+  "chest pain",
+  "stomach ache",
+  "sore throat",
+  "tabiyat kharab",
+  "tabiat kharab",
+  "tabiyat kharaab",
+  "tabiat kharaab",
+  "sir main dard",
+  "sir mein dard",
+  "sar main dard",
+  "sar mein dard",
+  "pet mein dard",
+  "pet main dard",
   "unconscious",
   "fainted",
+  "fainting",
   "bleeding",
   "seizure",
+  "stomachache",
+  "headache",
+  "migraine",
+  "vomiting",
+  "dizziness",
+  "fracture",
+  "injured",
+  "injury",
+  "asthma",
+  "allergy",
+  "allergic",
+  "medical",
+  "fever",
+  "bukhar",
+  "bukhaar",
+  "chakkar",
+  "dizzy",
+  "vomit",
+  "ulti",
+  "ultiyan",
+  "nausea",
+  "sardard",
+  "sir dard",
+  "sar dard",
+  "pet dard",
+  "bimar",
+  "bimaar",
+  "unwell",
+  "sick",
   "sparking",
   "chingari",
   "flames",
@@ -194,20 +242,16 @@ const FACILITY_DEFECT_STATE_REGEX =
 const FACILITY_TARGET_NOUN_REGEX =
   /\b(?:ac|fan|pankha|light|bulb|power|chair|kursi|table|desk|bench|door|window|lock|ceiling|roof|wall|floor|stairs|elevator|lift|tap|sink|pipe|washroom|toilet|pc|computer|keyboard|mouse|monitor|screen|display|audio|books?|food|khana|plate|plates|water|pani|paani|garbage|trash|heater|projector|wifi|router)\b/i;
 
+const MEDICAL_ISSUE_REGEX =
+  /\b(?:medical(?:\s+(?:issue|emergency|help|attention|aid))?|first\s+aid|ambulance|clinic|unconscious|faint(?:ed|ing)?|seizure|bleed(?:ing)?|khoon|behosh|fracture|sprain|injur(?:y|ed)|wound|chot|zakhm|asthma|allergy|allergic|breath(?:ing)?\s+(?:issue|problem|difficulty|trouble)|chest\s+pain|choking|heat\s*stroke|dehydrat\w*|headache|migraine|stomach\s*ache|stomachache|belly\s*ache|tummy\s*ache|back\s*ache|backache|tooth\s*ache|toothache|ear\s*ache|earache|body\s*ache|sore\s*throat|fever|flu|nausea|nauseous|dizzy|dizziness|vomit(?:ing)?|diarrhea|constipation|loose\s+motions?|cramps|bukhar|bukhaar|zukaam|zukam|khansi|khaansi|chakkar|ulti|ultiyan|matli|bimar|bimaar|unwell|sick|ill|not\s+feeling\s+well|(?:sir|sar)\s+(?:main|mein|me|m)?\s*dard|(?:sir|sar)dard|(?:pet|pait|kamar|dant|daant|gala|seena|dil|taang|tang|paon|pair|hath|haath|badan|jism|ankh|aankh|kaan)\s+(?:main|mein|me|m)?\s*(?:dard|takleef)|dard\s+(?:ho\s*r(?:ha|aha|hi|ahi)|hai|h)|(?:tabiyat|tabiat)\s+(?:kharab|kharaab|theek\s+nahi|sahi\s+nahi)|(?:my|mere|meri|mera)\s+(?:head|stomach|tummy|belly|back|neck|shoulder|leg|arm|hand|foot|feet|knee|tooth|teeth|throat|ear|eye|eyes|body|sir|sar|pet|pait)\s+(?:is\s+)?(?:hurt(?:s|ing)?|ach(?:e|es|ing)|pain(?:ing|ful)?|sore|swollen))\b/i;
+
 const PERSONAL_HEALTH_STATE_REGEX =
-  /\b(?:tabiyat|tabiat|pet|pait|gala|mood|neend)\s+(?:kharab|kharaab|theek\s+nahi|sahi\s+nahi|upset)\b/i;
+  /\b(?:mood|neend)\s+(?:kharab|kharaab|theek\s+nahi|sahi\s+nahi|upset)\b/i;
 
 const PERSONAL_NON_FACILITY_PATTERNS: RegExp[] = [
-  // Roman Urdu headaches / body pain / illness / fatigue
-  /\b(?:sir|sar)\s+(?:main|mein|me|m)?\s*dard\b|\b(?:sir|sar)dard\b/i,
-  /\b(?:pet|pait|kamar|dant|daant|gala|seena|dil|taang|tang|paon|pair|hath|haath|badan|jism|ankh|aankh|kaan)\s+(?:main|mein|me|m)?\s*(?:dard|takleef)\b/i,
-  /\bdard\s+(?:ho\s*r(?:ha|aha|hi|ahi)|hai|h)\b/i,
   PERSONAL_HEALTH_STATE_REGEX,
-  /\b(?:bukhar|bukhaar|zukaam|zukam|khansi|khaansi|chakkar|ulti|ultiyan|matli|bhook|bhuk|pyaas|pyas|thakan|neend)\b/i,
-  // English headaches / aches / personal symptoms
-  /\b(?:headache|migraine|stomach\s*ache|stomachache|belly\s*ache|tummy\s*ache|back\s*ache|backache|tooth\s*ache|toothache|ear\s*ache|earache|body\s*ache|sore\s*throat|fever|flu|nausea|nauseous|dizzy|dizziness|vomit(?:ing)?|diarrhea|constipation|loose\s+motions?|cramps|hangover)\b/i,
-  /\b(?:my|mere|meri|mera)\s+(?:head|stomach|tummy|belly|back|neck|shoulder|leg|arm|hand|foot|feet|knee|tooth|teeth|throat|ear|eye|eyes|body|sir|sar|pet|pait)\s+(?:is\s+)?(?:hurt(?:s|ing)?|ach(?:e|es|ing)|pain(?:ing|ful)?|sore|swollen)\b/i,
-  /\b(?:i\s+am|i'?m|im|i\s+feel|feeling|mujhe|mujh\s+ko|mjhe|mjhy)\s+(?:feeling\s+)?(?:sick|ill|unwell|tired|exhausted|sleepy|hungry|thirsty|bored|sad|depressed|lonely|anxious|stressed|not\s+feeling\s+well|bimar|bimaar)\b/i,
+  /\b(?:bhook|bhuk|pyaas|pyas|thakan|neend|hangover)\b/i,
+  /\b(?:i\s+am|i'?m|im|i\s+feel|feeling|mujhe|mujh\s+ko|mjhe|mjhy)\s+(?:feeling\s+)?(?:tired|exhausted|sleepy|hungry|thirsty|bored|sad|depressed|lonely|anxious|stressed)\b/i,
   // Personal bodily urges / bathroom needs (not facility defects)
   /\b(?:tatti|tatty|potty|potti|susu|su\s*su|peshab|peshaab|hajat|poop|pee|shit|crap|fart)\b/i,
   /\b(?:need|have|got|gotta|want)\s+to\s+(?:use\s+(?:the\s+)?(?:washroom|bathroom|toilet|restroom)|go\s+(?:to\s+(?:the\s+)?)?(?:washroom|bathroom|toilet|restroom))\b/i,
@@ -219,6 +263,12 @@ const PERSONAL_NON_FACILITY_PATTERNS: RegExp[] = [
   /\b(?:i\s+)?(?:forgot|lost|misplaced)\s+my\s+(?:pen|pencil|notebook|book|bag|wallet|keys?|phone|charger|id\s+card|bottle)\b/i,
   /\b(?:need\s+money|paise\s+(?:chahiye|khatam))\b/i,
 ];
+
+export function hasMedicalIssueSignal(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return MEDICAL_ISSUE_REGEX.test(trimmed);
+}
 
 export function hasFacilityDefectSignal(text: string): boolean {
   const withoutPersonalHealth = text.replace(PERSONAL_HEALTH_STATE_REGEX, " ");
@@ -238,6 +288,7 @@ export function isPersonalNonFacilityIssue(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
   if (HARASSMENT_REGEX.test(trimmed)) return false;
+  if (hasMedicalIssueSignal(trimmed)) return false;
   if (hasFacilityDefectSignal(trimmed)) return false;
   return PERSONAL_NON_FACILITY_PATTERNS.some((pat) => pat.test(trimmed));
 }
@@ -246,13 +297,12 @@ export function hasActionableFacilityOrHarassmentSignal(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
   if (HARASSMENT_REGEX.test(trimmed)) return true;
+  if (hasMedicalIssueSignal(trimmed)) return true;
   if (isPersonalNonFacilityIssue(trimmed)) return false;
   if (hasFacilityDefectSignal(trimmed)) return true;
   return (
     FACILITY_DEFECT_STATE_REGEX.test(trimmed) &&
-    !/\b(?:tabiyat|tabiat|pet|pait|gala|mood|sir|sar|head|stomach|tatti|potty|susu|peshab)\b/i.test(
-      trimmed
-    )
+    !/\b(?:mood|neend|tatti|potty|susu|peshab)\b/i.test(trimmed)
   );
 }
 
@@ -503,6 +553,7 @@ export function sanitizePublicSummary(
 }
 
 export function buildDeterministicOneLineReason(opts: {
+  isMedicalTopPriority?: boolean;
   isSafetyHazard: boolean;
   hazardType?: HazardType;
   safetyQuote?: string;
@@ -518,6 +569,13 @@ export function buildDeterministicOneLineReason(opts: {
 }): string {
   if (opts.isConfidential) {
     return "Confidential safety report isolated to Admin Safety Vault (reporter identity protected).";
+  }
+  if (opts.isMedicalTopPriority) {
+    const quotePart = opts.safetyQuote ? `: "${opts.safetyQuote}"` : "";
+    const overridePart = opts.adminOverridePriority
+      ? `; Admin override -> ${opts.adminOverridePriority}`
+      : "";
+    return `Medical issue (${opts.hazardType ?? "medical"}${quotePart}) — top priority CRITICAL (100)${overridePart}.`;
   }
   if (opts.isSafetyHazard) {
     const quotePart = opts.safetyQuote ? `: "${opts.safetyQuote}"` : "";
@@ -650,8 +708,15 @@ export function recomputeIssuePriority(db: DatabaseState, issue: Issue): void {
   let crowdBonus: number;
   let computedScore: number;
   let computedPriority: PriorityLevel;
+  const isMedicalTopPriority =
+    issue.category === "medical_emergency" || pb.hazardType === "medical";
 
-  if (pb.isSafetyHazard) {
+  if (isMedicalTopPriority) {
+    baseScore = 100;
+    crowdBonus = 0;
+    computedScore = 100;
+    computedPriority = "CRITICAL";
+  } else if (pb.isSafetyHazard) {
     baseScore = 98;
     crowdBonus = 0;
     computedScore = 98;
@@ -691,6 +756,7 @@ export function recomputeIssuePriority(db: DatabaseState, issue: Issue): void {
   }
 
   issue.oneLineReason = buildDeterministicOneLineReason({
+    isMedicalTopPriority,
     isSafetyHazard: pb.isSafetyHazard,
     hazardType: pb.hazardType,
     safetyQuote: pb.safetyQuote,

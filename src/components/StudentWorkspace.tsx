@@ -468,7 +468,7 @@ export function StudentWorkspace({
                 Report an issue
               </h1>
               <p className="mt-1 text-[14px] leading-5 text-[#525252]">
-                Facility or safety issues and confidential harassment/bullying reports · personal complaints are not accepted
+                Facility, medical, or safety issues and confidential harassment/bullying reports · unrelated personal complaints are not accepted
               </p>
             </div>
 
