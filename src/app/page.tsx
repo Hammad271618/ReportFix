@@ -595,14 +595,14 @@ export default function HomePage() {
         message?: string;
       };
       if (!res.ok || !data.ok || !data.summary) {
-        throw new Error(data.message || "Failed to generate briefing");
+        throw new Error(data.message || "Failed to generate AI Admin Summary");
       }
       setAdminSummary(data.summary);
-      showToast("success", "Briefing generated");
+      showToast("success", "AI Admin Summary generated");
     } catch (err) {
       showToast(
         "error",
-        err instanceof Error ? err.message : "Failed to generate briefing"
+        err instanceof Error ? err.message : "Failed to generate AI Admin Summary"
       );
     } finally {
       setBusyAction(null);

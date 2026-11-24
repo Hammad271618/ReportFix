@@ -261,7 +261,7 @@ export function AdminOversightView({
                 className="h-4 w-4 text-[#525252]"
                 strokeWidth={1.5}
               />
-              <span>Briefing</span>
+              <span>AI Admin Summary</span>
               <ArrowUpRight
                 className="h-3.5 w-3.5 text-[#737373]"
                 strokeWidth={1.5}
@@ -1143,13 +1143,13 @@ export function AdminOversightView({
         </div>
       )}
 
-      {/* SECTION 5: BRIEFING */}
+      {/* SECTION 5: AI ADMIN SUMMARY */}
       {activeSection === "briefing" && (
         <div className="space-y-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="text-[28px] leading-[1.15] font-medium tracking-[-0.02em] text-[#171717]">
-                Executive briefing
+                AI Admin Summary
               </h1>
               <p className="mt-1 text-[14px] leading-5 text-[#525252]">
                 Active hazards, bottlenecks, and trust signals
@@ -1167,7 +1167,7 @@ export function AdminOversightView({
                   ? "Generating"
                   : adminSummary
                   ? "Refresh"
-                  : "Generate briefing"}
+                  : "Generate summary"}
               </span>
             </button>
           </div>
@@ -1249,7 +1249,7 @@ export function AdminOversightView({
               </div>
             ) : (
               <div className="py-10 text-center text-[14px] text-[#737373]">
-                Generate a briefing to summarize current campus status
+                Generate an AI Admin Summary of current campus status
               </div>
             )}
           </section>

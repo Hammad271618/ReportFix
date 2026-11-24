@@ -215,7 +215,7 @@ export function AppSidebar({
           },
           {
             id: "briefing",
-            label: "Briefing",
+            label: "AI Admin Summary",
             icon: ClipboardList,
           },
         ];
