@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   UserPlus,
   RotateCcw,
@@ -9,8 +10,14 @@ import {
   Pencil,
   Check,
   X,
+  ChevronDown,
+  Search,
+  Database,
+  Eraser,
 } from "lucide-react";
-import type { User } from "@/lib/types";
+import type { User, UserRole } from "@/lib/types";
+import { getTrustMeta } from "@/lib/format-ui";
+import { CRAFT_EASE } from "@/components/MotionPrimitives";
 
 interface JudgeBarProps {
   activeUser: User;
@@ -18,18 +25,18 @@ interface JudgeBarProps {
   busyAction: string | null;
   onOpenMobileNav: () => void;
   onSwitchUser: (userId: string) => void;
+  onSwitchRole: (role: UserRole) => void;
   onCreateStudent: () => Promise<void>;
   onRenameStudent: (userId: string, name: string) => Promise<void>;
   onReset: (mode: "clean" | "samples") => Promise<void>;
   onRefresh: () => Promise<void>;
 }
 
-function trustDotColor(score: number): string {
-  if (score >= 80) return "bg-[#16a34a]";
-  if (score >= 60) return "bg-[#1d4ed8]";
-  if (score >= 45) return "bg-[#d97706]";
-  return "bg-[#dc2626]";
-}
+const ROLE_TABS: Array<{ role: UserRole; label: string }> = [
+  { role: "student", label: "Student" },
+  { role: "staff", label: "Staff" },
+  { role: "admin", label: "Registrar" },
+];
 
 export function JudgeBar({
   activeUser,
@@ -37,19 +44,106 @@ export function JudgeBar({
   busyAction,
   onOpenMobileNav,
   onSwitchUser,
+  onSwitchRole,
   onCreateStudent,
   onRenameStudent,
   onReset,
   onRefresh,
 }: JudgeBarProps) {
+  const [personaOpen, setPersonaOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
 
-  const students = users.filter((u) => u.role === "student");
-  const staff = users.filter((u) => u.role === "staff");
-  const admins = users.filter((u) => u.role === "admin");
+  const personaRef = useRef<HTMLDivElement>(null);
+  const resetRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isBusy = busyAction !== null;
+
+  const students = useMemo(
+    () => users.filter((u) => u.role === "student"),
+    [users]
+  );
+  const staff = useMemo(() => users.filter((u) => u.role === "staff"), [users]);
+  const admins = useMemo(
+    () => users.filter((u) => u.role === "admin"),
+    [users]
+  );
+
+  const q = query.trim().toLowerCase();
+  const filteredStudents = useMemo(
+    () =>
+      !q
+        ? students
+        : students.filter(
+            (u) =>
+              u.name.toLowerCase().includes(q) ||
+              String(u.trustScore).includes(q)
+          ),
+    [students, q]
+  );
+  const filteredStaff = useMemo(
+    () =>
+      !q
+        ? staff
+        : staff.filter(
+            (u) =>
+              u.name.toLowerCase().includes(q) ||
+              (u.department ?? "").toLowerCase().includes(q)
+          ),
+    [staff, q]
+  );
+  const filteredAdmins = useMemo(
+    () =>
+      !q
+        ? admins
+        : admins.filter((u) => u.name.toLowerCase().includes(q)),
+    [admins, q]
+  );
+
+  // Close popovers on outside click or Escape; open persona switcher on Cmd/Ctrl+K
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setResetOpen(false);
+        setPersonaOpen((prev) => {
+          if (!prev) setQuery("");
+          return !prev;
+        });
+      } else if (e.key === "Escape") {
+        setPersonaOpen(false);
+        setResetOpen(false);
+        setEditingUserId(null);
+      }
+    };
+    const onClickOutside = (e: MouseEvent) => {
+      if (
+        personaRef.current &&
+        !personaRef.current.contains(e.target as Node)
+      ) {
+        setPersonaOpen(false);
+        setEditingUserId(null);
+      }
+      if (resetRef.current && !resetRef.current.contains(e.target as Node)) {
+        setResetOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousedown", onClickOutside);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousedown", onClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!personaOpen) return;
+    const id = setTimeout(() => searchInputRef.current?.focus(), 40);
+    return () => clearTimeout(id);
+  }, [personaOpen]);
 
   const submitRename = async (e: React.FormEvent, userId: string) => {
     e.preventDefault();
@@ -59,227 +153,458 @@ export function JudgeBar({
     setEditingUserId(null);
   };
 
+  const activeTrust = getTrustMeta(activeUser.trustScore);
+
   return (
-    <header className="sticky top-0 z-30 border-b border-[#111827]/[0.08] bg-[#ffffff]">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-2.5">
-        {/* Left: Mobile menu button + 1-click persona switcher */}
-        <div className="flex flex-wrap items-center gap-3">
+    <header className="sticky top-0 z-30 h-14 border-b border-[#171717]/[0.09] bg-[#f7f7f6]/90 backdrop-blur-md">
+      <div className="flex h-full items-center justify-between gap-3 px-4 md:px-6 lg:px-8">
+        {/* Left: Mobile drawer trigger + 1-click Role Tabs + Persona Command Switcher */}
+        <div className="flex min-w-0 items-center gap-2.5">
           <button
             type="button"
             onClick={onOpenMobileNav}
-            aria-label="Open navigation menu"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#111827]/[0.08] bg-[#ffffff] text-[#4b5565] hover:bg-[#eceff4] hover:text-[#111827] lg:hidden transition-colors duration-150 ease-craft"
+            aria-label="Open navigation"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-[#171717]/[0.08] bg-[#ffffff] text-[#525252] hover:bg-[#efefed] hover:text-[#171717] lg:hidden press-tactile"
           >
             <Menu className="h-4 w-4" strokeWidth={1.5} />
           </button>
 
-          {/* Students group */}
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="mr-1 text-[12px] leading-4 text-[#6b7487]">
-              Students
-            </span>
-            {students.map((u) => {
-              const selected = u.id === activeUser.id;
-              const isNewStudent = u.isNewAccount || u.id.startsWith("stu-new-");
-              const isEditingThis = editingUserId === u.id;
-
-              if (isEditingThis) {
-                return (
-                  <form
-                    key={u.id}
-                    onSubmit={(e) => void submitRename(e, u.id)}
-                    className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[#1d4ed8] bg-[#ffffff] px-1.5"
-                  >
-                    <input
-                      type="text"
-                      value={draftName}
-                      onChange={(e) => setDraftName(e.target.value)}
-                      maxLength={60}
-                      autoFocus
-                      placeholder="Student name"
-                      className="h-6 w-28 bg-transparent px-1 text-[13px] leading-5 text-[#111827] focus:outline-none"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isBusy || !draftName.trim()}
-                      aria-label="Save name"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-[5px] bg-[#1d4ed8] text-[#ffffff] hover:bg-[#1e40af] disabled:opacity-50"
-                    >
-                      <Check className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingUserId(null)}
-                      aria-label="Cancel rename"
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-[5px] text-[#6b7487] hover:bg-[#eceff4] hover:text-[#111827]"
-                    >
-                      <X className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    </button>
-                  </form>
-                );
-              }
-
+          {/* 1-Click Role Switcher with silky sliding active pill */}
+          <div
+            role="tablist"
+            aria-label="Workspace role"
+            className="hidden sm:inline-flex h-8 items-center rounded-[8px] border border-[#171717]/[0.08] bg-[#efefed] p-0.5"
+          >
+            {ROLE_TABS.map((tab) => {
+              const selected = activeUser.role === tab.role;
               return (
-                <div key={u.id} className="inline-flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => onSwitchUser(u.id)}
-                    title={u.trustExplanation || `${u.name} · Trust ${u.trustScore}`}
-                    className={`inline-flex h-8 items-center gap-1.5 border px-2.5 text-[13px] leading-5 transition-colors duration-150 ease-craft tabular-nums ${
-                      isNewStudent ? "rounded-l-[8px]" : "rounded-[8px]"
-                    } ${
-                      selected
-                        ? "border-[#1d4ed8] bg-[#1d4ed8] text-[#ffffff] font-medium"
-                        : "border-[#111827]/[0.08] bg-[#f5f7fa] text-[#4b5565] font-normal hover:bg-[#eceff4] hover:text-[#111827]"
-                    }`}
-                  >
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        selected ? "bg-[#ffffff]" : trustDotColor(u.trustScore)
-                      }`}
+                <button
+                  key={tab.role}
+                  role="tab"
+                  aria-selected={selected}
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => onSwitchRole(tab.role)}
+                  className={`relative h-7 rounded-[6px] px-3 text-[13px] leading-5 transition-colors duration-150 ease-craft ${
+                    selected
+                      ? "text-[#171717] font-medium"
+                      : "text-[#525252] hover:text-[#171717]"
+                  }`}
+                >
+                  {selected && (
+                    <motion.span
+                      layoutId="topbar-role-pill"
+                      transition={{ duration: 0.2, ease: CRAFT_EASE }}
+                      className="absolute inset-0 rounded-[6px] bg-[#ffffff] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                     />
-                    <span>{u.name}</span>
-                    <span
-                      className={`font-mono text-[12px] ${
-                        selected ? "text-[#ffffff]/90" : "text-[#6b7487]"
-                      }`}
-                    >
-                      {u.trustScore}
-                    </span>
-                    {u.isNewAccount && (
-                      <span
-                        className={`rounded-[4px] px-1 font-mono text-[12px] leading-4 ${
-                          selected
-                            ? "bg-[#ffffff]/20 text-[#ffffff]"
-                            : "bg-[#eceff4] text-[#4b5565]"
-                        }`}
-                      >
-                        New
-                      </span>
-                    )}
-                  </button>
-                  {isNewStudent && (
-                    <button
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => {
-                        setDraftName(u.name);
-                        setEditingUserId(u.id);
-                      }}
-                      title={`Rename ${u.name}`}
-                      aria-label={`Rename ${u.name}`}
-                      className={`inline-flex h-8 w-7 items-center justify-center rounded-r-[8px] border border-l-0 transition-colors duration-150 ease-craft ${
-                        selected
-                          ? "border-[#1d4ed8] bg-[#1e40af] text-[#ffffff] hover:bg-[#1d4ed8]"
-                          : "border-[#111827]/[0.08] bg-[#f5f7fa] text-[#6b7487] hover:bg-[#eceff4] hover:text-[#111827]"
-                      }`}
-                    >
-                      <Pencil className="h-3 w-3" strokeWidth={1.5} />
-                    </button>
                   )}
-                </div>
-              );
-            })}
-          </div>
-
-          <span className="hidden h-4 w-px bg-[#111827]/[0.08] xl:inline-block" />
-
-          {/* Department Staff group */}
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="mr-1 text-[12px] leading-4 text-[#6b7487]">
-              Staff
-            </span>
-            {staff.map((u) => {
-              const selected = u.id === activeUser.id;
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => onSwitchUser(u.id)}
-                  className={`inline-flex h-8 items-center rounded-[8px] border px-2.5 text-[13px] leading-5 transition-colors duration-150 ease-craft ${
-                    selected
-                      ? "border-[#1d4ed8] bg-[#1d4ed8] text-[#ffffff] font-medium"
-                      : "border-[#111827]/[0.08] bg-[#f5f7fa] text-[#4b5565] font-normal hover:bg-[#eceff4] hover:text-[#111827]"
-                  }`}
-                >
-                  {u.department || u.name}
+                  <span className="relative z-10">{tab.label}</span>
                 </button>
               );
             })}
           </div>
 
-          <span className="hidden h-4 w-px bg-[#111827]/[0.08] sm:inline-block" />
+          <span className="hidden h-4 w-px bg-[#171717]/[0.1] sm:inline-block" />
 
-          {/* Registrar Admin */}
-          <div className="flex items-center gap-1">
-            {admins.map((u) => {
-              const selected = u.id === activeUser.id;
-              return (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => onSwitchUser(u.id)}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-[8px] border px-2.5 text-[13px] leading-5 transition-colors duration-150 ease-craft ${
-                    selected
-                      ? "border-[#1d4ed8] bg-[#1d4ed8] text-[#ffffff] font-medium"
-                      : "border-[#111827]/[0.08] bg-[#f5f7fa] text-[#111827] font-normal hover:bg-[#eceff4]"
-                  }`}
+          {/* Persona Selector Popover Trigger */}
+          <div ref={personaRef} className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setResetOpen(false);
+                setPersonaOpen((v) => {
+                  if (!v) setQuery("");
+                  return !v;
+                });
+              }}
+              aria-expanded={personaOpen}
+              aria-haspopup="listbox"
+              className={`inline-flex h-8 items-center gap-2 rounded-[8px] border bg-[#ffffff] px-2.5 text-[13px] leading-5 text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-colors duration-150 ease-craft press-tactile ${
+                personaOpen
+                  ? "border-[#0f766e]/50"
+                  : "border-[#171717]/[0.09] hover:border-[#171717]/[0.18]"
+              }`}
+            >
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${
+                  activeUser.role === "student"
+                    ? activeTrust.dotColor
+                    : activeUser.role === "staff"
+                    ? "bg-[#0f766e]"
+                    : "bg-[#171717]"
+                }`}
+              />
+              <span className="max-w-[140px] truncate font-medium">
+                {activeUser.role === "staff"
+                  ? `${activeUser.department} Desk`
+                  : activeUser.name}
+              </span>
+              {activeUser.role === "student" && (
+                <span className="font-mono text-[12px] text-[#737373] tabular-nums">
+                  {activeUser.trustScore}
+                </span>
+              )}
+              <ChevronDown
+                className={`h-3.5 w-3.5 text-[#737373] transition-transform duration-150 ease-craft ${
+                  personaOpen ? "rotate-180" : ""
+                }`}
+                strokeWidth={1.5}
+              />
+              <span className="hidden md:inline-flex items-center gap-0.5 pl-0.5">
+                <kbd className="kbd-cap">⌘</kbd>
+                <kbd className="kbd-cap">K</kbd>
+              </span>
+            </button>
+
+            <AnimatePresence>
+              {personaOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                  transition={{ duration: 0.16, ease: CRAFT_EASE }}
+                  className="absolute left-0 top-[calc(100%+8px)] z-50 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[12px] border border-[#171717]/[0.1] bg-[#ffffff] shadow-[0_14px_36px_rgba(0,0,0,0.12),0_1px_2px_rgba(0,0,0,0.05)]"
                 >
-                  <span>{u.name}</span>
-                </button>
-              );
-            })}
+                  {/* Search input */}
+                  <div className="flex items-center gap-2 border-b border-[#171717]/[0.08] px-3 py-2.5">
+                    <Search
+                      className="h-4 w-4 shrink-0 text-[#737373]"
+                      strokeWidth={1.5}
+                    />
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Switch student, desk, or registrar"
+                      className="w-full bg-transparent text-[13px] leading-5 text-[#171717] placeholder:text-[#737373] focus:outline-none focus-visible:outline-none"
+                    />
+                    {query && (
+                      <button
+                        type="button"
+                        onClick={() => setQuery("")}
+                        className="text-[#737373] hover:text-[#171717]"
+                      >
+                        <X className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-[480px] overflow-y-auto p-2 space-y-2.5">
+                    {/* Students */}
+                    {filteredStudents.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between px-2 pb-1.5">
+                          <span className="text-[11px] font-medium text-[#737373]">
+                            Students ({filteredStudents.length})
+                          </span>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={async () => {
+                              await onCreateStudent();
+                              setPersonaOpen(false);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium text-[#0f766e] hover:bg-[#0f766e]/[0.08] transition-colors duration-150"
+                          >
+                            <UserPlus className="h-3 w-3" strokeWidth={1.5} />
+                            <span>Add new</span>
+                          </button>
+                        </div>
+                        <div className="space-y-0.5">
+                          {filteredStudents.map((u) => {
+                            const selected = u.id === activeUser.id;
+                            const trust = getTrustMeta(u.trustScore);
+                            const isNew =
+                              u.isNewAccount || u.id.startsWith("stu-new-");
+                            const isEditing = editingUserId === u.id;
+
+                            if (isEditing) {
+                              return (
+                                <form
+                                  key={u.id}
+                                  onSubmit={(e) => void submitRename(e, u.id)}
+                                  className="flex items-center gap-1.5 rounded-[8px] border border-[#0f766e] bg-[#fafafa] px-2 py-1"
+                                >
+                                  <input
+                                    type="text"
+                                    value={draftName}
+                                    onChange={(e) =>
+                                      setDraftName(e.target.value)
+                                    }
+                                    maxLength={60}
+                                    autoFocus
+                                    placeholder="Student name"
+                                    className="h-6 min-w-0 flex-1 bg-transparent text-[13px] text-[#171717] focus:outline-none"
+                                  />
+                                  <button
+                                    type="submit"
+                                    disabled={isBusy || !draftName.trim()}
+                                    aria-label="Save name"
+                                    className="inline-flex h-6 w-6 items-center justify-center rounded-[5px] bg-[#171717] text-[#ffffff]"
+                                  >
+                                    <Check
+                                      className="h-3.5 w-3.5"
+                                      strokeWidth={1.75}
+                                    />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingUserId(null)}
+                                    aria-label="Cancel"
+                                    className="inline-flex h-6 w-6 items-center justify-center rounded-[5px] text-[#737373] hover:bg-[#efefed]"
+                                  >
+                                    <X
+                                      className="h-3.5 w-3.5"
+                                      strokeWidth={1.75}
+                                    />
+                                  </button>
+                                </form>
+                              );
+                            }
+
+                            return (
+                              <div
+                                key={u.id}
+                                className={`group flex items-center justify-between rounded-[8px] px-2.5 py-1.5 text-[13px] transition-colors duration-150 ${
+                                  selected
+                                    ? "bg-[#0f766e]/[0.08] text-[#171717]"
+                                    : "text-[#525252] hover:bg-[#f3f3f2] hover:text-[#171717]"
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onSwitchUser(u.id);
+                                    setPersonaOpen(false);
+                                  }}
+                                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                >
+                                  <span
+                                    className={`h-2 w-2 shrink-0 rounded-full ${trust.dotColor}`}
+                                  />
+                                  <span
+                                    className={`truncate ${
+                                      selected ? "font-medium" : "font-normal"
+                                    }`}
+                                  >
+                                    {u.name}
+                                  </span>
+                                  {u.isNewAccount && (
+                                    <span className="rounded-[4px] bg-[#efefed] px-1.5 py-0.5 font-mono text-[10px] leading-3 text-[#525252]">
+                                      New
+                                    </span>
+                                  )}
+                                </button>
+                                <div className="flex items-center gap-1.5">
+                                  {isNew && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDraftName(u.name);
+                                        setEditingUserId(u.id);
+                                      }}
+                                      aria-label={`Rename ${u.name}`}
+                                      className="inline-flex h-6 w-6 items-center justify-center rounded-[5px] text-[#737373] opacity-70 hover:bg-[#e7e7e5] hover:text-[#171717] hover:opacity-100"
+                                    >
+                                      <Pencil
+                                        className="h-3 w-3"
+                                        strokeWidth={1.5}
+                                      />
+                                    </button>
+                                  )}
+                                  <span className="w-7 text-right font-mono text-[12px] text-[#737373] tabular-nums">
+                                    {u.trustScore}
+                                  </span>
+                                  {selected && (
+                                    <Check
+                                      className="h-3.5 w-3.5 text-[#0f766e]"
+                                      strokeWidth={2}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Department Staff */}
+                    {filteredStaff.length > 0 && (
+                      <div>
+                        <div className="px-2 pb-1.5 text-[11px] font-medium text-[#737373]">
+                          Department desks
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                          {filteredStaff.map((u) => {
+                            const selected = u.id === activeUser.id;
+                            return (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onClick={() => {
+                                  onSwitchUser(u.id);
+                                  setPersonaOpen(false);
+                                }}
+                                className={`flex h-8 items-center justify-center rounded-[7px] border text-[12px] transition-colors duration-150 press-tactile ${
+                                  selected
+                                    ? "border-[#0f766e]/40 bg-[#0f766e]/[0.09] font-medium text-[#0f766e]"
+                                    : "border-[#171717]/[0.07] bg-[#fafafa] text-[#525252] hover:bg-[#efefed] hover:text-[#171717]"
+                                }`}
+                              >
+                                {u.department || u.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Registrar Admin */}
+                    {filteredAdmins.length > 0 && (
+                      <div>
+                        <div className="px-2 pb-1.5 text-[11px] font-medium text-[#737373]">
+                          Administration
+                        </div>
+                        {filteredAdmins.map((u) => {
+                          const selected = u.id === activeUser.id;
+                          return (
+                            <button
+                              key={u.id}
+                              type="button"
+                              onClick={() => {
+                                onSwitchUser(u.id);
+                                setPersonaOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between rounded-[8px] px-2.5 py-2 text-[13px] transition-colors duration-150 ${
+                                selected
+                                  ? "bg-[#0f766e]/[0.08] font-medium text-[#171717]"
+                                  : "text-[#525252] hover:bg-[#f3f3f2] hover:text-[#171717]"
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className="h-2 w-2 rounded-full bg-[#171717]" />
+                                <span>{u.name}</span>
+                              </span>
+                              {selected && (
+                                <Check
+                                  className="h-3.5 w-3.5 text-[#0f766e]"
+                                  strokeWidth={2}
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* Right: Simulation & Judge Controls (all 32px tall, 8px radius, 16px icons) */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Right: Compact utility actions (all 32px tall, never wraps) */}
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             disabled={isBusy}
             onClick={onCreateStudent}
-            className="inline-flex h-8 items-center gap-2 rounded-[8px] border border-[#111827]/[0.08] bg-[#eceff4] px-3 text-[13px] leading-5 font-medium text-[#111827] hover:bg-[#e2e6ee] disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-150 ease-craft"
+            className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#171717]/[0.09] bg-[#ffffff] px-2.5 text-[13px] leading-5 font-medium text-[#171717] shadow-[0_1px_2px_rgba(0,0,0,0.03)] hover:bg-[#f3f3f2] disabled:cursor-not-allowed disabled:opacity-50 press-tactile"
           >
-            <UserPlus className="h-4 w-4 text-[#4b5565]" strokeWidth={1.5} />
-            <span>
-              {busyAction === "create-student" ? "Creating" : "New student"}
+            <UserPlus className="h-4 w-4 text-[#525252]" strokeWidth={1.5} />
+            <span className="hidden sm:inline">
+              {busyAction === "create-student" ? "Adding" : "New student"}
             </span>
           </button>
 
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={() => onReset("clean")}
-            className="inline-flex h-8 items-center gap-2 rounded-[8px] border border-[#111827]/[0.08] bg-[#ffffff] px-3 text-[13px] leading-5 font-normal text-[#4b5565] hover:bg-[#eceff4] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-150 ease-craft"
-          >
-            <RotateCcw className="h-4 w-4 text-[#6b7487]" strokeWidth={1.5} />
-            <span>
-              {busyAction === "reset-clean" ? "Resetting" : "Reset clean"}
-            </span>
-          </button>
+          {/* Consolidated Reset dropdown menu */}
+          <div ref={resetRef} className="relative">
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => {
+                setPersonaOpen(false);
+                setResetOpen((v) => !v);
+              }}
+              aria-expanded={resetOpen}
+              className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#171717]/[0.09] bg-[#ffffff] px-2.5 text-[13px] leading-5 font-normal text-[#525252] shadow-[0_1px_2px_rgba(0,0,0,0.03)] hover:bg-[#f3f3f2] hover:text-[#171717] disabled:cursor-not-allowed disabled:opacity-50 press-tactile"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-[#737373]" strokeWidth={1.5} />
+              <span className="hidden sm:inline">
+                {busyAction?.startsWith("reset-") ? "Resetting" : "Reset"}
+              </span>
+              <ChevronDown
+                className={`h-3.5 w-3.5 text-[#737373] transition-transform duration-150 ${
+                  resetOpen ? "rotate-180" : ""
+                }`}
+                strokeWidth={1.5}
+              />
+            </button>
 
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={() => onReset("samples")}
-            className="inline-flex h-8 items-center gap-2 rounded-[8px] border border-[#111827]/[0.08] bg-[#ffffff] px-3 text-[13px] leading-5 font-normal text-[#4b5565] hover:bg-[#eceff4] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-150 ease-craft"
-          >
-            <RotateCcw className="h-4 w-4 text-[#6b7487]" strokeWidth={1.5} />
-            <span>
-              {busyAction === "reset-samples" ? "Resetting" : "Reset samples"}
-            </span>
-          </button>
+            <AnimatePresence>
+              {resetOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                  transition={{ duration: 0.16, ease: CRAFT_EASE }}
+                  className="absolute right-0 top-[calc(100%+8px)] z-50 w-52 overflow-hidden rounded-[10px] border border-[#171717]/[0.1] bg-[#ffffff] p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.1)]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetOpen(false);
+                      void onReset("samples");
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-[7px] px-2.5 py-2 text-left text-[13px] text-[#171717] hover:bg-[#f3f3f2] transition-colors duration-150"
+                  >
+                    <Database
+                      className="h-4 w-4 text-[#737373]"
+                      strokeWidth={1.5}
+                    />
+                    <div>
+                      <div className="leading-4 font-medium">Sample tickets</div>
+                      <div className="mt-0.5 text-[11px] leading-3.5 text-[#737373]">
+                        Seed demo issues
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetOpen(false);
+                      void onReset("clean");
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-[7px] px-2.5 py-2 text-left text-[13px] text-[#171717] hover:bg-[#f3f3f2] transition-colors duration-150"
+                  >
+                    <Eraser
+                      className="h-4 w-4 text-[#737373]"
+                      strokeWidth={1.5}
+                    />
+                    <div>
+                      <div className="leading-4 font-medium">Clean baseline</div>
+                      <div className="mt-0.5 text-[11px] leading-3.5 text-[#737373]">
+                        Empty ticket queue
+                      </div>
+                    </div>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           <button
             type="button"
             disabled={isBusy}
             onClick={onRefresh}
-            title="Refresh state from server"
-            aria-label="Refresh state from server"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#111827]/[0.08] bg-[#ffffff] text-[#4b5565] hover:bg-[#eceff4] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-150 ease-craft"
+            title="Refresh"
+            aria-label="Refresh state"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#171717]/[0.09] bg-[#ffffff] text-[#525252] shadow-[0_1px_2px_rgba(0,0,0,0.03)] hover:bg-[#f3f3f2] hover:text-[#171717] disabled:cursor-not-allowed disabled:opacity-50 press-tactile"
           >
             <RefreshCw
-              className={`h-4 w-4 text-[#6b7487] ${
+              className={`h-3.5 w-3.5 text-[#737373] ${
                 busyAction === "refresh" ? "animate-spin" : ""
               }`}
               strokeWidth={1.5}

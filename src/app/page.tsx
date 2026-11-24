@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
 import type {
   AdminSummaryResult,
@@ -11,6 +12,7 @@ import type {
   SubmitReportResponse,
   TriageItemTrace,
   User,
+  UserRole,
 } from "@/lib/types";
 import {
   AppSidebar,
@@ -23,6 +25,8 @@ import { JudgeBar } from "@/components/JudgeBar";
 import { StudentWorkspace } from "@/components/StudentWorkspace";
 import { StaffQueueView } from "@/components/StaffQueueView";
 import { AdminOversightView } from "@/components/AdminOversightView";
+import { BrandMark, CRAFT_EASE } from "@/components/MotionPrimitives";
+import { stripTrailingPeriod } from "@/lib/format-ui";
 
 const SESSION_STORAGE_KEY = "reportfix_active_user_id";
 
@@ -30,10 +34,6 @@ interface ToastMessage {
   id: number;
   kind: "success" | "error" | "info";
   text: string;
-}
-
-function stripTrailingPeriod(msg: string): string {
-  return msg.replace(/\.$/, "");
 }
 
 export default function HomePage() {
@@ -52,7 +52,10 @@ export default function HomePage() {
     null
   );
 
-  // Navigation state synchronized with the Left Sidebar
+  // Remember last selected user per role for seamless 1-click role switching
+  const lastUserByRole = useRef<Partial<Record<UserRole, string>>>({});
+
+  // Navigation state synchronized with AppSidebar
   const [studentNav, setStudentNav] = useState<StudentNavId>("report");
   const [staffNav, setStaffNav] = useState<StaffNavId>("ACTIVE");
   const [adminNav, setAdminNav] = useState<AdminNavId>("all");
@@ -70,7 +73,7 @@ export default function HomePage() {
     if (!toast) return;
     const timer = setTimeout(() => {
       setToast((curr) => (curr?.id === toast.id ? null : curr));
-    }, 5500);
+    }, 5200);
     return () => clearTimeout(timer);
   }, [toast]);
 
@@ -93,6 +96,7 @@ export default function HomePage() {
         const payload = (await res.json()) as ClientStatePayload;
         setClientState(payload);
         setActiveUserId(payload.activeUser.id);
+        lastUserByRole.current[payload.activeUser.role] = payload.activeUser.id;
         try {
           sessionStorage.setItem(SESSION_STORAGE_KEY, payload.activeUser.id);
         } catch {
@@ -112,7 +116,6 @@ export default function HomePage() {
     [activeUserId]
   );
 
-  // Initial load with sessionStorage userId restore
   useEffect(() => {
     let mounted = true;
     const init = async () => {
@@ -134,7 +137,6 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Gentle background polling when idle & visible
   useEffect(() => {
     if (!activeUserId) return;
     const interval = setInterval(() => {
@@ -159,11 +161,24 @@ export default function HomePage() {
     }
   };
 
+  const handleSwitchRole = async (role: UserRole) => {
+    if (!clientState || clientState.activeUser.role === role) return;
+    const remembered = lastUserByRole.current[role];
+    const matchRemembered = remembered
+      ? clientState.users.find((u) => u.id === remembered && u.role === role)
+      : undefined;
+    const fallback = clientState.users.find((u) => u.role === role);
+    const target = matchRemembered ?? fallback;
+    if (target) {
+      await handleSwitchUser(target.id);
+    }
+  };
+
   const handleRefresh = async () => {
     setBusyAction("refresh");
     try {
       await fetchState(activeUserId);
-      showToast("info", "State refreshed from server");
+      showToast("info", "Synced latest state");
     } finally {
       setBusyAction(null);
     }
@@ -190,7 +205,7 @@ export default function HomePage() {
       setStudentNav("report");
       showToast(
         "success",
-        `Switched to ${data.user.name} (Trust ${data.user.trustScore}, new account)`
+        `Switched to ${data.user.name} · Trust ${data.user.trustScore}`
       );
     } catch (err) {
       showToast(
@@ -222,7 +237,7 @@ export default function HomePage() {
         throw new Error(data.message || "Failed to rename student");
       }
       await fetchState(activeUserId || data.user.id);
-      showToast("success", data.message || `Renamed student to ${data.user.name}`);
+      showToast("success", `Renamed to ${data.user.name}`);
     } catch (err) {
       showToast(
         "error",
@@ -256,9 +271,7 @@ export default function HomePage() {
       await fetchState(activeUserId || undefined);
       showToast(
         "success",
-        mode === "clean"
-          ? "Database reset to clean baseline"
-          : "Database reset with seeded sample tickets"
+        mode === "clean" ? "Reset to clean baseline" : "Reset with sample tickets"
       );
     } catch (err) {
       showToast(
@@ -301,7 +314,7 @@ export default function HomePage() {
       await fetchState(clientState.activeUser.id);
       showToast(
         "success",
-        data.message || `Triaged ${data.items.length} report item(s)`
+        data.message || `Triaged ${data.items.length} item(s)`
       );
     } catch (err) {
       showToast(
@@ -333,7 +346,7 @@ export default function HomePage() {
         message?: string;
       };
       if (!res.ok || !data.ok) {
-        throw new Error(data.message || "Failed to clarify location");
+        throw new Error(data.message || "Failed to confirm room");
       }
       if (data.trace) {
         setLastSubmissionsByUser((prev) => ({
@@ -341,16 +354,16 @@ export default function HomePage() {
           [clientState.activeUser.id]: {
             ok: true,
             items: [data.trace!],
-            message: data.message || "Clarified location and routed report",
+            message: data.message || "Room confirmed and routed",
           },
         }));
       }
       await fetchState(clientState.activeUser.id);
-      showToast("success", data.message || "Location clarified and routed");
+      showToast("success", data.message || "Room confirmed and routed");
     } catch (err) {
       showToast(
         "error",
-        err instanceof Error ? err.message : "Failed to clarify location"
+        err instanceof Error ? err.message : "Failed to confirm room"
       );
     } finally {
       setBusyAction(null);
@@ -383,9 +396,7 @@ export default function HomePage() {
       showToast(
         data.held ? "info" : "success",
         data.message ||
-          (data.held
-            ? "Action held for registrar brigade review"
-            : "Added your Me too confirmation")
+          (data.held ? "Held for brigade review" : "Joined issue")
       );
     } catch (err) {
       showToast(
@@ -430,7 +441,7 @@ export default function HomePage() {
       await fetchState(clientState.activeUser.id);
       showToast(
         data.held ? "info" : "success",
-        data.message || `Vote recorded (${data.outcome ?? choice})`
+        data.message || `Vote recorded`
       );
     } catch (err) {
       showToast(
@@ -468,10 +479,10 @@ export default function HomePage() {
         message?: string;
       };
       if (!res.ok || !data.ok) {
-        throw new Error(data.message || "Failed to update issue status");
+        throw new Error(data.message || "Failed to update status");
       }
       await fetchState(clientState.activeUser.id);
-      showToast("success", data.message || `Status updated to ${status}`);
+      showToast("success", data.message || `Status updated`);
     } catch (err) {
       showToast(
         "error",
@@ -513,7 +524,7 @@ export default function HomePage() {
         throw new Error(data.message || "Override failed");
       }
       await fetchState(clientState.activeUser.id);
-      showToast("success", data.message || "Registrar override applied");
+      showToast("success", data.message || "Override applied");
     } catch (err) {
       showToast(
         "error",
@@ -548,20 +559,20 @@ export default function HomePage() {
         message?: string;
       };
       if (!res.ok || !data.ok) {
-        throw new Error(data.message || "Failed to process brigade alert");
+        throw new Error(data.message || "Failed to process alert");
       }
       await fetchState(clientState.activeUser.id);
       showToast(
         "success",
         data.message ||
           (decision === "confirm"
-            ? "Brigade confirmed: -10 trust applied and held actions discarded"
-            : "False alarm dismissed: held votes released and priority recomputed")
+            ? "Brigade confirmed · -10 trust applied"
+            : "Alert dismissed · held votes released")
       );
     } catch (err) {
       showToast(
         "error",
-        err instanceof Error ? err.message : "Failed to resolve brigade alert"
+        err instanceof Error ? err.message : "Failed to resolve alert"
       );
     } finally {
       setBusyAction(null);
@@ -587,7 +598,7 @@ export default function HomePage() {
         throw new Error(data.message || "Failed to generate briefing");
       }
       setAdminSummary(data.summary);
-      showToast("success", data.message || "Executive briefing generated");
+      showToast("success", "Briefing generated");
     } catch (err) {
       showToast(
         "error",
@@ -600,13 +611,16 @@ export default function HomePage() {
 
   if (initialLoading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f7fa] p-6 text-[#4b5565]">
-        <Loader2
-          className="h-6 w-6 animate-spin text-[#1d4ed8]"
-          strokeWidth={1.5}
-        />
-        <p className="mt-3 text-[14px] leading-5 font-normal">
-          Loading ReportFix dispatch console
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#fafafa] p-6 text-[#525252]">
+        <div className="flex items-center gap-3">
+          <BrandMark className="h-6 w-6" />
+          <Loader2
+            className="h-4 w-4 animate-spin text-[#0f766e]"
+            strokeWidth={1.75}
+          />
+        </div>
+        <p className="mt-3 text-[13px] leading-5 text-[#737373]">
+          Loading ReportFix
         </p>
       </div>
     );
@@ -614,24 +628,24 @@ export default function HomePage() {
 
   if (loadError && !clientState) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f7fa] p-6">
-        <div className="w-full max-w-md rounded-[12px] border border-[#111827]/[0.08] bg-[#ffffff] p-6 text-center">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#fafafa] p-6">
+        <div className="surface-card w-full max-w-sm rounded-[14px] p-6 text-center">
           <AlertCircle
-            className="mx-auto h-6 w-6 text-[#dc2626]"
+            className="mx-auto h-5 w-5 text-[#dc2626]"
             strokeWidth={1.5}
           />
-          <h1 className="mt-3 text-[16px] leading-6 font-medium text-[#111827]">
-            Unable to connect to ReportFix API
+          <h1 className="mt-3 text-[15px] leading-5 font-medium text-[#171717]">
+            Connection failed
           </h1>
-          <p className="mt-1 text-[13px] leading-5 text-[#4b5565]">
+          <p className="mt-1 text-[13px] leading-5 text-[#525252]">
             {loadError}
           </p>
           <button
             type="button"
             onClick={() => void fetchState()}
-            className="mt-4 h-9 rounded-[8px] bg-[#111827] px-4 text-[13px] leading-5 font-medium text-[#ffffff] hover:bg-[#1f2937] transition-colors duration-150 ease-craft"
+            className="mt-4 h-9 rounded-[8px] bg-[#171717] px-4 text-[13px] leading-5 font-medium text-[#ffffff] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-[#262626] press-tactile"
           >
-            Retry connection
+            Retry
           </button>
         </div>
       </div>
@@ -660,8 +674,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#f5f7fa] text-[#111827]">
-      {/* Left Sidebar (264px fixed desktop shell, responsive drawer on mobile) */}
+    <div className="flex min-h-screen bg-[#f7f7f6] text-[#171717]">
       <AppSidebar
         activeUser={activeUser}
         clientState={clientState}
@@ -673,7 +686,6 @@ export default function HomePage() {
         onCloseMobile={() => setMobileNavOpen(false)}
       />
 
-      {/* Right Main Column */}
       <div className="flex min-w-0 flex-1 flex-col">
         <JudgeBar
           activeUser={activeUser}
@@ -681,41 +693,56 @@ export default function HomePage() {
           busyAction={busyAction}
           onOpenMobileNav={() => setMobileNavOpen(true)}
           onSwitchUser={handleSwitchUser}
+          onSwitchRole={handleSwitchRole}
           onCreateStudent={handleCreateStudent}
           onRenameStudent={handleRenameStudent}
           onReset={handleReset}
           onRefresh={handleRefresh}
         />
 
-        {/* Toast Notification */}
-        {toast && (
-          <div className="fixed right-6 bottom-6 z-50 max-w-md animate-enter">
-            <div className="flex items-start gap-3 rounded-[10px] border border-[#111827]/[0.08] bg-[#ffffff] px-4 py-3 text-[13px] leading-5 text-[#111827] shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
-              {toast.kind === "error" ? (
-                <AlertCircle
-                  className="mt-0.5 h-4 w-4 shrink-0 text-[#dc2626]"
-                  strokeWidth={1.5}
-                />
-              ) : (
-                <CheckCircle2
-                  className="mt-0.5 h-4 w-4 shrink-0 text-[#16a34a]"
-                  strokeWidth={1.5}
-                />
-              )}
-              <span className="flex-1">{toast.text}</span>
-              <button
-                type="button"
-                onClick={() => setToast(null)}
-                aria-label="Dismiss notification"
-                className="text-[#6b7487] hover:text-[#111827]"
-              >
-                <X className="h-4 w-4" strokeWidth={1.5} />
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Animated Toast Notification with subtle decay rail */}
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: CRAFT_EASE }}
+              className="fixed right-6 bottom-6 z-50 max-w-md overflow-hidden rounded-[12px] border border-[#171717]/[0.1] bg-[#171717] text-[#fafafa] shadow-[0_14px_36px_rgba(0,0,0,0.18)]"
+            >
+              <div className="flex items-start gap-2.5 px-4 py-3 text-[13px] leading-5">
+                {toast.kind === "error" ? (
+                  <AlertCircle
+                    className="mt-0.5 h-4 w-4 shrink-0 text-[#f87171]"
+                    strokeWidth={1.5}
+                  />
+                ) : (
+                  <CheckCircle2
+                    className="mt-0.5 h-4 w-4 shrink-0 text-[#4ade80]"
+                    strokeWidth={1.5}
+                  />
+                )}
+                <span className="flex-1">{toast.text}</span>
+                <button
+                  type="button"
+                  onClick={() => setToast(null)}
+                  aria-label="Dismiss"
+                  className="text-[#a3a3a3] hover:text-[#ffffff] transition-colors"
+                >
+                  <X className="h-4 w-4" strokeWidth={1.5} />
+                </button>
+              </div>
+              <div
+                className={`h-[2px] w-full animate-toast-progress ${
+                  toast.kind === "error" ? "bg-[#f87171]" : "bg-[#14b8a6]"
+                }`}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-6 py-6 md:px-8 md:py-8">
+        <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 py-6 md:px-8 md:py-7">
           {activeUser.role === "student" && (
             <StudentWorkspace
               activeUser={activeUser}

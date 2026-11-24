@@ -1,42 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  /* Light Ink neutral ramp (main workspace) */
-  --bg-page: #f5f7fa;
+  /* Architectural Graphite Light neutral ramp */
+  --bg-page: #f7f7f6;
+  --bg-sidebar: #f0f0ee;
   --bg-card: #ffffff;
-  --bg-raised: #eceff4;
-  --border-hairline: rgba(17, 24, 39, 0.08);
-  --border-strong: rgba(17, 24, 39, 0.14);
+  --bg-raised: #ebebea;
+  --bg-hover: #f3f3f1;
+  --border-hairline: rgba(23, 23, 23, 0.09);
+  --border-strong: rgba(23, 23, 23, 0.16);
 
-  /* Text roles (strictly three roles) */
-  --text-primary: #111827;
-  --text-secondary: #4b5565;
-  --text-muted: #6b7487;
+  /* Strictly three text roles */
+  --text-primary: #171717;
+  --text-secondary: #525252;
+  --text-muted: #737373;
 
-  /* Deep Ink ramp (left sidebar) */
-  --sidebar-bg: #0b0d14;
-  --sidebar-card: #11141c;
-  --sidebar-raised: #1a1e28;
-  --sidebar-hairline: rgba(238, 240, 245, 0.08);
-  --sidebar-text-primary: #eef0f5;
-  --sidebar-text-secondary: #a3a9b8;
-  --sidebar-text-muted: #7a8296;
-
-  /* Single chrome accent (Cobalt, >4.5:1 contrast with white) */
-  --accent: #1d4ed8;
-  --accent-hover: #1e40af;
-  --accent-subtle: rgba(29, 78, 216, 0.08);
+  /* Single accent: Spruce Teal (>5.4:1 contrast with white) */
+  --accent: #0f766e;
+  --accent-hover: #115e59;
+  --accent-subtle: rgba(15, 118, 110, 0.08);
 
   /* Toned semantic colors */
-  --semantic-positive: #16a34a;
-  --semantic-positive-bg: rgba(22, 163, 74, 0.08);
+  --semantic-positive: #15803d;
+  --semantic-positive-bg: rgba(21, 128, 61, 0.08);
   --semantic-warning: #b45309;
   --semantic-warning-bg: rgba(180, 83, 9, 0.08);
   --semantic-negative: #dc2626;
   --semantic-negative-bg: rgba(220, 38, 38, 0.08);
 
-  /* Single easing curve from unslop tokens */
-  --ease-out-quart: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Light theme neutral elevation */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.045), 0 0 0 1px rgba(23, 23, 23, 0.01);
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.09), 0 1px 2px rgba(0, 0, 0, 0.05);
+
+  /* Single easing curve across the entire interface */
+  --ease-craft: cubic-bezier(0.22, 1, 0.36, 1);
 
   color-scheme: light;
 }
@@ -44,50 +41,89 @@
 @theme inline {
   --color-background: var(--bg-page);
   --color-foreground: var(--text-primary);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-html,
-body {
-  background-color: var(--bg-page);
-  color: var(--text-primary);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+@layer base {
+  html,
+  body {
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    font-family: var(--font-instrument-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Accessible focus ring inside palette */
+  *:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
 }
 
-/* Tabular figures for all numbers, scores, weights, and timestamps */
+@layer components {
+  /* Crisp elevated card surface — sits cleanly over #f7f7f6 canvas */
+  .surface-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-hairline);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Keycap micro-badge */
+  .kbd-cap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 20px;
+    min-width: 20px;
+    padding: 0 5px;
+    border-radius: 5px;
+    border: 1px solid var(--border-strong);
+    background-color: var(--bg-card);
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--text-muted);
+    box-shadow: 0 1px 0 rgba(23, 23, 23, 0.06);
+  }
+
+  /* Tactile button press without layout shift */
+  .press-tactile {
+    transition-property: transform, background-color, border-color, color, opacity;
+    transition-duration: 150ms;
+    transition-timing-function: var(--ease-craft);
+  }
+
+  .press-tactile:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-/* Motion helpers using the single easing curve */
 .ease-craft {
-  transition-timing-function: var(--ease-out-quart);
+  transition-timing-function: var(--ease-craft);
 }
 
-@keyframes contentEnter {
+/* Toast progress decay */
+@keyframes toastProgress {
   from {
-    opacity: 0;
-    transform: translateY(8px);
+    transform: scaleX(1);
   }
   to {
-    opacity: 1;
-    transform: translateY(0);
+    transform: scaleX(0);
   }
 }
 
-.animate-enter {
-  animation: contentEnter 320ms var(--ease-out-quart) both;
+.animate-toast-progress {
+  transform-origin: left;
+  animation: toastProgress 5200ms linear forwards;
 }
 
-/* Visible keyboard focus ring inside the palette */
-*:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* Subtle operational scrollbars */
+/* Subtle architectural scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -98,10 +134,20 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(17, 24, 39, 0.16);
+  background: rgba(23, 23, 23, 0.14);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(17, 24, 39, 0.28);
+  background: rgba(23, 23, 23, 0.26);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

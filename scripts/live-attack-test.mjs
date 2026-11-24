@@ -645,6 +645,55 @@ async function main() {
     assert.equal(h.data.storage, "local-json");
   });
 
+  // 19. Personal Non-Facility Issues Rejected vs Harassment & Facility Accepted
+  await runTest("19. Personal Non-Facility Issues Rejected While Harassment & Washroom Facility Accepted", async () => {
+    await reset("clean");
+
+    const p1 = await req("POST", "/api/reports", {
+      userId: "stu-ayesha",
+      text: "sir main dard ho rha",
+    });
+    assert.equal(p1.data.items[0].outcome, "REJECTED_NO_ISSUE");
+    assert.equal(p1.data.items[0].codeDecision.trustDelta, 0);
+
+    const p2 = await req("POST", "/api/reports", {
+      userId: "stu-zainab",
+      text: "mujhe tatti aa rhi",
+    });
+    assert.equal(p2.data.items[0].outcome, "REJECTED_NO_ISSUE");
+    assert.equal(p2.data.items[0].codeDecision.trustDelta, 0);
+
+    const p3 = await req("POST", "/api/reports", {
+      userId: "stu-usman",
+      text: "CR 20 mein mere sir main dard ho rha hai aur mujhe bukhar hai",
+    });
+    assert.equal(p3.data.items[0].outcome, "REJECTED_NO_ISSUE");
+
+    // Compound personal + facility: ignores headache, keeps Networking Lab AC
+    const p4 = await req("POST", "/api/reports", {
+      userId: "stu-bilal",
+      text: "sir main dard ho rha aur Networking Lab ka AC kharab hai",
+    });
+    assert.equal(p4.data.items.length, 1);
+    assert.equal(p4.data.items[0].outcome, "CREATED");
+    assert.equal(p4.data.items[0].codeDecision.locationName, "Networking Lab");
+
+    // Harassment/bullying (only allowed personal issue) still creates confidential case
+    const p5 = await req("POST", "/api/reports", {
+      userId: "stu-hina",
+      text: "Seniors are bullying and intimidating me in Qasid Complex",
+    });
+    assert.equal(p5.data.items[0].outcome, "CONFIDENTIAL_CREATED");
+
+    // Fixable washroom facility issue is accepted
+    const p6 = await req("POST", "/api/reports", {
+      userId: "stu-saad",
+      text: "IS Cafe washroom mein pani nahi aa raha aur flush kharab hai",
+    });
+    assert.equal(p6.data.items[0].outcome, "CREATED");
+    assert.equal(p6.data.items[0].codeDecision.locationName, "IS Cafe");
+  });
+
   console.log(`\n=== SUMMARY: ${passed} passed, ${failed} failed ===`);
   if (failed > 0) process.exit(1);
 }

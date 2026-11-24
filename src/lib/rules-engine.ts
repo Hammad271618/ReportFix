@@ -180,7 +180,81 @@ const SAFETY_KEYWORDS: string[] = [
 ];
 
 const HARASSMENT_REGEX =
-  /\b(?:harass|harassment|harassing|ragging|stalking|stalked|molest|molestation|bullying|bully|sexual|inappropriate\s+touch|badtameezi|cherkhaani|tang\s+kar\s+rahe|tang\s+kr\s+rahe)\b/i;
+  /\b(?:harass\w*|ragging|stalk\w*|molest\w*|bully\w*|bullied|bullies|sexual\w*|inappropriate\s+touch\w*|intimidat\w*|threaten\w*|blackmail\w*|verbal\s+abuse|physical\s+abuse|abusing\s+(?:me|us|students?|freshers?)|badtameezi|cherkhaani|tang\s+kar\s+rahe|tang\s+kr\s+rahe|tang\s+kar\s+rha|tang\s+kar\s+rhi)\b/i;
+
+const FACILITY_EQUIPMENT_OR_HAZARD_REGEX =
+  /\b(?:ac|a\.c\.|air\s*condition\w*|cooling|hvac|thermostat|wifi|wi-fi|wify|internet|network|netwrk|router|lms|portal|proj[eo]ct[eo]?r?|projektr|hdmi|mic|microphone|speaker|water\s*cooler|dispenser|flush|plumbing|drain|bulb|tube\s*light|socket|outlet|switch|live\s+wire|nangi\s+taar|bijli|pankha|oscilloscope|microscope|printer|lab\s+equipment|kursi|dustbin|whiteboard|cockroach|stale|expired|fire\s+hazard|electrical\s+fire|sparks?|sparking|chingari|flames|smoke|dhuaan|gas\s*leak|gas\s+ki\s+boo|gas\s+smell|short\s+circuit|electric\s+shock|current\s+lag|chemical\s+spill|ceiling\s+collapse)\b/i;
+
+const WASHROOM_FACILITY_DEFECT_REGEX =
+  /\b(?:washroom|toilet|restroom|bathroom)\b[\s\S]{0,60}\b(?:water|pani|paani|flush|clog\w*|block\w*|overflow\w*|leak\w*|dirty|ganda|gandi|gandagi|smell\w*|stink\w*|boo|broken|kharab|kharaab|toot\w*|door|lock|tap|sink|light|bulb|clean\w*|tissue|soap|not\s+working|band|nhi|nahi)\b|\b(?:water|pani|paani|flush|clog\w*|block\w*|overflow\w*|leak\w*|dirty|ganda|gandi|gandagi|smell\w*|stink\w*|boo|broken|kharab|kharaab|toot\w*|door|lock|tap|sink|light|bulb|clean\w*|tissue|soap|not\s+working|band)\b[\s\S]{0,60}\b(?:washroom|toilet|restroom|bathroom)\b/i;
+
+const FACILITY_DEFECT_STATE_REGEX =
+  /\b(?:broken|broke|not\s+working|doesn'?t\s+work|doesnt\s+work|isn'?t\s+working|isnt\s+working|chal\s+nhi|chal\s+nahi|damaged|flicker\w*|dim|slow|down|disconnect\w*|clog\w*|block\w*|overflow\w*|leak\w*|dirty|ganda|gandi|dusty|smell\w*|stink\w*|cockroach\w*|stale|expired|loose|wobbly|squeak\w*|torn|missing|no\s+water|no\s+power|no\s+light|fix|repair|sparks?|sparking|chingari|smoke|dhuaan|gas\s*leak|short\s+circuit|electric\s+shock|collapse\w*|spill|kharab|kharaab|band\s+hai|band\s+ho\s+gaya)\b/i;
+
+const FACILITY_TARGET_NOUN_REGEX =
+  /\b(?:ac|fan|pankha|light|bulb|power|chair|kursi|table|desk|bench|door|window|lock|ceiling|roof|wall|floor|stairs|elevator|lift|tap|sink|pipe|washroom|toilet|pc|computer|keyboard|mouse|monitor|screen|display|audio|books?|food|khana|plate|plates|water|pani|paani|garbage|trash|heater|projector|wifi|router)\b/i;
+
+const PERSONAL_HEALTH_STATE_REGEX =
+  /\b(?:tabiyat|tabiat|pet|pait|gala|mood|neend)\s+(?:kharab|kharaab|theek\s+nahi|sahi\s+nahi|upset)\b/i;
+
+const PERSONAL_NON_FACILITY_PATTERNS: RegExp[] = [
+  // Roman Urdu headaches / body pain / illness / fatigue
+  /\b(?:sir|sar)\s+(?:main|mein|me|m)?\s*dard\b|\b(?:sir|sar)dard\b/i,
+  /\b(?:pet|pait|kamar|dant|daant|gala|seena|dil|taang|tang|paon|pair|hath|haath|badan|jism|ankh|aankh|kaan)\s+(?:main|mein|me|m)?\s*(?:dard|takleef)\b/i,
+  /\bdard\s+(?:ho\s*r(?:ha|aha|hi|ahi)|hai|h)\b/i,
+  PERSONAL_HEALTH_STATE_REGEX,
+  /\b(?:bukhar|bukhaar|zukaam|zukam|khansi|khaansi|chakkar|ulti|ultiyan|matli|bhook|bhuk|pyaas|pyas|thakan|neend)\b/i,
+  // English headaches / aches / personal symptoms
+  /\b(?:headache|migraine|stomach\s*ache|stomachache|belly\s*ache|tummy\s*ache|back\s*ache|backache|tooth\s*ache|toothache|ear\s*ache|earache|body\s*ache|sore\s*throat|fever|flu|nausea|nauseous|dizzy|dizziness|vomit(?:ing)?|diarrhea|constipation|loose\s+motions?|cramps|hangover)\b/i,
+  /\b(?:my|mere|meri|mera)\s+(?:head|stomach|tummy|belly|back|neck|shoulder|leg|arm|hand|foot|feet|knee|tooth|teeth|throat|ear|eye|eyes|body|sir|sar|pet|pait)\s+(?:is\s+)?(?:hurt(?:s|ing)?|ach(?:e|es|ing)|pain(?:ing|ful)?|sore|swollen)\b/i,
+  /\b(?:i\s+am|i'?m|im|i\s+feel|feeling|mujhe|mujh\s+ko|mjhe|mjhy)\s+(?:feeling\s+)?(?:sick|ill|unwell|tired|exhausted|sleepy|hungry|thirsty|bored|sad|depressed|lonely|anxious|stressed|not\s+feeling\s+well|bimar|bimaar)\b/i,
+  // Personal bodily urges / bathroom needs (not facility defects)
+  /\b(?:tatti|tatty|potty|potti|susu|su\s*su|peshab|peshaab|hajat|poop|pee|shit|crap|fart)\b/i,
+  /\b(?:need|have|got|gotta|want)\s+to\s+(?:use\s+(?:the\s+)?(?:washroom|bathroom|toilet|restroom)|go\s+(?:to\s+(?:the\s+)?)?(?:washroom|bathroom|toilet|restroom))\b/i,
+  /\b(?:washroom|bathroom|toilet)\s+(?:jana|jaana|aa\s*r(?:ha|aha|hi|ahi))\b/i,
+  // Personal relationship, family, academic, financial, or lost-item issues
+  /\b(?:break\s*up|broke\s+up|girlfriend|boyfriend|heartbreak|dil\s+toot)\b/i,
+  /\b(?:family\s+(?:issue|problem|matter)|personal\s+(?:issue|problem|matter|reason)|meri\s+zindagi|tension\s+ho\s*r(?:hi|ahi)|udasi)\b/i,
+  /\b(?:failed\s+(?:my|the)\s+(?:exam|quiz|test|course)|homework\s+is\s+hard|assignment\s+(?:is\s+hard|nahi\s+ho\s+rha)|missed\s+(?:my|the)\s+bus|woke\s+up\s+late)\b/i,
+  /\b(?:i\s+)?(?:forgot|lost|misplaced)\s+my\s+(?:pen|pencil|notebook|book|bag|wallet|keys?|phone|charger|id\s+card|bottle)\b/i,
+  /\b(?:need\s+money|paise\s+(?:chahiye|khatam))\b/i,
+];
+
+export function hasFacilityDefectSignal(text: string): boolean {
+  const withoutPersonalHealth = text.replace(PERSONAL_HEALTH_STATE_REGEX, " ");
+  if (WASHROOM_FACILITY_DEFECT_REGEX.test(withoutPersonalHealth)) {
+    return true;
+  }
+  if (FACILITY_EQUIPMENT_OR_HAZARD_REGEX.test(withoutPersonalHealth)) {
+    return true;
+  }
+  return (
+    FACILITY_TARGET_NOUN_REGEX.test(withoutPersonalHealth) &&
+    FACILITY_DEFECT_STATE_REGEX.test(withoutPersonalHealth)
+  );
+}
+
+export function isPersonalNonFacilityIssue(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (HARASSMENT_REGEX.test(trimmed)) return false;
+  if (hasFacilityDefectSignal(trimmed)) return false;
+  return PERSONAL_NON_FACILITY_PATTERNS.some((pat) => pat.test(trimmed));
+}
+
+export function hasActionableFacilityOrHarassmentSignal(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (HARASSMENT_REGEX.test(trimmed)) return true;
+  if (isPersonalNonFacilityIssue(trimmed)) return false;
+  if (hasFacilityDefectSignal(trimmed)) return true;
+  return (
+    FACILITY_DEFECT_STATE_REGEX.test(trimmed) &&
+    !/\b(?:tabiyat|tabiat|pet|pait|gala|mood|sir|sar|head|stomach|tatti|potty|susu|peshab)\b/i.test(
+      trimmed
+    )
+  );
+}
 
 function spansOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
   return aStart < bEnd && aEnd > bStart;
@@ -393,7 +467,7 @@ export function resolveDepartmentForIssue(
 }
 
 const SANITIZE_STRIP_PATTERNS: RegExp[] = [
-  /\b(?:harass\w*|ragging|stalk\w*|molest\w*|bully\w*|sexual\w*|inappropriate\s+touch\w*|badtameezi|cherkhaani|tang\s+kar\s+rahe|tang\s+kr\s+rahe)\b/gi,
+  /\b(?:harass\w*|ragging|stalk\w*|molest\w*|bully\w*|bullied|bullies|sexual\w*|inappropriate\s+touch\w*|intimidat\w*|threaten\w*|blackmail\w*|verbal\s+abuse|physical\s+abuse|badtameezi|cherkhaani|tang\s+kar\s+rahe|tang\s+kr\s+rahe|tang\s+kar\s+rha|tang\s+kar\s+rhi)\b/gi,
   /\bignore\s+(?:all\s+|previous\s+|prior\s+|your\s+|the\s+|system\s+)*(?:rules|instructions|prompts?|guidelines|policies)\b/gi,
   /\bsystem\s+prompt\b/gi,
   /\b(?:act|behave|pretend)\s+as\s+(?:an?\s+)?(?:admin|staff|system|moderator|root)\b/gi,

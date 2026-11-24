@@ -1,17 +1,32 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { motion } from "motion/react";
 import {
   CheckCircle2,
   PlayCircle,
   Ban,
   ChevronDown,
-  ChevronUp,
-  Info,
   Lock,
 } from "lucide-react";
-import type { Issue, IssueStatus, PriorityLevel, User } from "@/lib/types";
+import type { Issue, IssueStatus, User } from "@/lib/types";
 import type { StaffNavId } from "@/components/AppSidebar";
+import {
+  formatPriorityLabel,
+  formatRoomCode,
+  formatStatusLabel,
+  formatTime,
+  priorityScoreStyle,
+  statusDotColor,
+  stripTrailingPeriod,
+} from "@/lib/format-ui";
+import {
+  AnimatedNumber,
+  CRAFT_EASE,
+  RevealPanel,
+  SectionStage,
+  StaggerCard,
+} from "@/components/MotionPrimitives";
 
 interface StaffQueueViewProps {
   activeUser: User;
@@ -26,73 +41,15 @@ interface StaffQueueViewProps {
   ) => Promise<void>;
 }
 
-function formatPriorityLabel(priority: PriorityLevel): string {
-  switch (priority) {
-    case "CRITICAL":
-      return "Critical";
-    case "HIGH":
-      return "High";
-    case "MEDIUM":
-      return "Medium";
-    case "LOW":
-    default:
-      return "Low";
-  }
-}
-
-function priorityDotColor(priority: PriorityLevel): string {
-  switch (priority) {
-    case "CRITICAL":
-      return "bg-[#dc2626]";
-    case "HIGH":
-      return "bg-[#d97706]";
-    case "MEDIUM":
-      return "bg-[#1d4ed8]";
-    case "LOW":
-    default:
-      return "bg-[#6b7487]";
-  }
-}
-
-function formatStatusLabel(status: IssueStatus): string {
-  switch (status) {
-    case "OPEN":
-      return "Open";
-    case "IN_PROGRESS":
-      return "In progress";
-    case "RESOLVED":
-      return "Awaiting verification";
-    case "REOPENED":
-      return "Reopened";
-    case "VERIFIED_RESOLVED":
-      return "Verified resolved";
-    case "DISMISSED_SPAM":
-      return "Dismissed";
-  }
-}
-
-function formatRoomCode(locationId: string, locationName: string): string {
-  if (locationId) {
-    return locationId.toUpperCase().replaceAll("_", "-");
-  }
-  return locationName
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function formatTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString([], {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
+const SUB_FILTERS = [
+  { id: "ALL_IN_VIEW", label: "All" },
+  { id: "OPEN", label: "Open" },
+  { id: "IN_PROGRESS", label: "In progress" },
+  { id: "REOPENED", label: "Reopened" },
+  { id: "RESOLVED", label: "Awaiting votes" },
+  { id: "VERIFIED_RESOLVED", label: "Verified" },
+  { id: "DISMISSED_SPAM", label: "Dismissed" },
+] as const;
 
 export function StaffQueueView({
   activeUser,
@@ -113,9 +70,7 @@ export function StaffQueueView({
 
   const handlePrimaryFilter = (next: StaffNavId) => {
     setSubFilter("ALL_IN_VIEW");
-    if (onSelectFilter) {
-      onSelectFilter(next);
-    }
+    onSelectFilter?.(next);
   };
 
   const sortedIssues = useMemo(() => {
@@ -170,153 +125,133 @@ export function StaffQueueView({
     };
   }, [issues]);
 
+  const kpiCards: Array<{
+    id: StaffNavId;
+    label: string;
+    value: number;
+    meta?: string;
+    dot?: string;
+  }> = [
+    {
+      id: "ACTIVE",
+      label: "Active",
+      value: counts.active,
+      meta: `of ${counts.total}`,
+    },
+    {
+      id: "CRITICAL",
+      label: "Critical",
+      value: counts.critical,
+      meta: "Priority 98",
+      dot: counts.critical > 0 ? "bg-[#dc2626]" : undefined,
+    },
+    {
+      id: "RESOLVED",
+      label: "Awaiting votes",
+      value: counts.awaitingVotes,
+      meta: "Pending check",
+    },
+    {
+      id: "REOPENED",
+      label: "Reopened",
+      value: counts.reopened,
+      meta: "Disputed",
+      dot: counts.reopened > 0 ? "bg-[#dc2626]" : undefined,
+    },
+  ];
+
   return (
-    <div className="space-y-6 animate-enter">
+    <SectionStage stageKey={`staff-${activeUser.id}-${activeFilter}`}>
       {/* Page Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-[28px] leading-[1.15] font-medium tracking-tight text-[#111827]">
-            {dept} department dispatch queue
+          <h1 className="text-[28px] leading-[1.15] font-medium tracking-[-0.02em] text-[#171717]">
+            {dept} queue
           </h1>
-          <p className="mt-1 flex items-center gap-2 text-[14px] leading-5 text-[#4b5565]">
-            <Lock
-              className="h-4 w-4 shrink-0 text-[#6b7487]"
-              strokeWidth={1.5}
-            />
-            <span>
-              Strictly scoped to {dept}. Reporter identities, raw student text,
-              and confidential vault cases are excluded at the API layer
-            </span>
+          <p className="mt-1 flex items-center gap-1.5 text-[14px] leading-5 text-[#525252]">
+            <Lock className="h-3.5 w-3.5 text-[#737373]" strokeWidth={1.5} />
+            <span>Scoped to {dept} · sorted by priority</span>
           </p>
         </div>
-        <span className="font-mono text-[12px] leading-4 text-[#6b7487]">
-          Ordered by priority score
+        <span className="font-mono text-[12px] text-[#737373] tabular-nums">
+          {sortedIssues.length} / {issues.length} tickets
         </span>
       </div>
 
-      {/* 4 Compact Stat Cards — numbers only, no corner icons */}
+      {/* 4 Compact Stat Cards */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <button
-          type="button"
-          onClick={() => handlePrimaryFilter("ACTIVE")}
-          className={`rounded-[12px] border p-5 text-left transition-colors duration-150 ease-craft ${
-            activeFilter === "ACTIVE"
-              ? "border-[#1d4ed8] bg-[#ffffff]"
-              : "border-[#111827]/[0.08] bg-[#ffffff] hover:bg-[#f5f7fa]"
-          }`}
-        >
-          <div className="text-[12px] leading-4 text-[#6b7487]">
-            Active department queue
-          </div>
-          <div className="mt-2 font-mono text-[32px] leading-none font-medium text-[#111827] tabular-nums">
-            {counts.active}
-          </div>
-          <div className="mt-2 text-[12px] leading-4 text-[#4b5565] tabular-nums">
-            {counts.total} total scoped to {dept}
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handlePrimaryFilter("CRITICAL")}
-          className={`rounded-[12px] border p-5 text-left transition-colors duration-150 ease-craft ${
-            activeFilter === "CRITICAL"
-              ? "border-[#1d4ed8] bg-[#ffffff]"
-              : "border-[#111827]/[0.08] bg-[#ffffff] hover:bg-[#f5f7fa]"
-          }`}
-        >
-          <div className="flex items-center gap-2 text-[12px] leading-4 text-[#6b7487]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#dc2626]" />
-            <span>Critical safety (98)</span>
-          </div>
-          <div className="mt-2 font-mono text-[32px] leading-none font-medium text-[#111827] tabular-nums">
-            {counts.critical}
-          </div>
-          <div className="mt-2 text-[12px] leading-4 text-[#4b5565]">
-            Verified verbatim safety hazards
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handlePrimaryFilter("RESOLVED")}
-          className={`rounded-[12px] border p-5 text-left transition-colors duration-150 ease-craft ${
-            activeFilter === "RESOLVED"
-              ? "border-[#1d4ed8] bg-[#ffffff]"
-              : "border-[#111827]/[0.08] bg-[#ffffff] hover:bg-[#f5f7fa]"
-          }`}
-        >
-          <div className="text-[12px] leading-4 text-[#6b7487]">
-            Awaiting student verification
-          </div>
-          <div className="mt-2 font-mono text-[32px] leading-none font-medium text-[#111827] tabular-nums">
-            {counts.awaitingVotes}
-          </div>
-          <div className="mt-2 text-[12px] leading-4 text-[#4b5565]">
-            Pending confirm or dispute votes
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handlePrimaryFilter("REOPENED")}
-          className={`rounded-[12px] border p-5 text-left transition-colors duration-150 ease-craft ${
-            activeFilter === "REOPENED"
-              ? "border-[#1d4ed8] bg-[#ffffff]"
-              : "border-[#111827]/[0.08] bg-[#ffffff] hover:bg-[#f5f7fa]"
-          }`}
-        >
-          <div className="text-[12px] leading-4 text-[#6b7487]">
-            Reopened by students
-          </div>
-          <div className="mt-2 font-mono text-[32px] leading-none font-medium text-[#111827] tabular-nums">
-            {counts.reopened}
-          </div>
-          <div className="mt-2 text-[12px] leading-4 text-[#4b5565]">
-            Dispute weight crossed threshold
-          </div>
-        </button>
-      </section>
-
-      {/* Status Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-[#111827]/[0.08] bg-[#ffffff] px-4 py-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {[
-            { id: "ALL_IN_VIEW", label: "Current view" },
-            { id: "OPEN", label: "Open" },
-            { id: "IN_PROGRESS", label: "In progress" },
-            { id: "REOPENED", label: "Reopened" },
-            { id: "RESOLVED", label: "Awaiting verification" },
-            { id: "VERIFIED_RESOLVED", label: "Verified resolved" },
-            { id: "DISMISSED_SPAM", label: "Dismissed" },
-          ].map((tab) => (
+        {kpiCards.map((card) => {
+          const selected = activeFilter === card.id;
+          return (
             <button
-              key={tab.id}
+              key={card.id}
               type="button"
-              onClick={() => setSubFilter(tab.id)}
-              className={`h-8 rounded-[8px] px-3 text-[13px] leading-5 transition-colors duration-150 ease-craft ${
-                subFilter === tab.id
-                  ? "bg-[#111827] text-[#ffffff] font-medium"
-                  : "bg-[#f5f7fa] text-[#4b5565] font-normal hover:bg-[#eceff4] hover:text-[#111827]"
+              onClick={() => handlePrimaryFilter(card.id)}
+              className={`surface-card rounded-[12px] p-4 text-left transition-colors duration-150 ease-craft press-tactile ${
+                selected
+                  ? "border-[#0f766e]/50 ring-1 ring-[#0f766e]/20"
+                  : "hover:border-[#171717]/[0.15]"
               }`}
             >
-              {tab.label}
+              <div className="flex items-center justify-between text-[12px] leading-4 text-[#737373]">
+                <span className="flex items-center gap-1.5">
+                  {card.dot && (
+                    <span className={`h-1.5 w-1.5 rounded-full ${card.dot}`} />
+                  )}
+                  <span>{card.label}</span>
+                </span>
+                {card.meta && (
+                  <span className="font-mono text-[11px] text-[#737373]">
+                    {card.meta}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 font-mono text-[28px] leading-none font-medium text-[#171717]">
+                <AnimatedNumber value={card.value} />
+              </div>
             </button>
-          ))}
+          );
+        })}
+      </section>
+
+      {/* Status Filter Bar with sliding active pill */}
+      <div className="surface-card flex flex-wrap items-center justify-between gap-3 rounded-[12px] px-3 py-2">
+        <div className="flex flex-wrap items-center gap-1">
+          {SUB_FILTERS.map((tab) => {
+            const active = subFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setSubFilter(tab.id)}
+                className={`relative h-8 rounded-[7px] px-3 text-[13px] leading-5 transition-colors duration-150 ${
+                  active
+                    ? "text-[#ffffff] font-medium"
+                    : "text-[#525252] hover:bg-[#f3f3f2] hover:text-[#171717]"
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="staff-subfilter-pill"
+                    transition={{ duration: 0.2, ease: CRAFT_EASE }}
+                    className="absolute inset-0 rounded-[7px] bg-[#171717]"
+                  />
+                )}
+                <span className="relative z-10">{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
-        <span className="font-mono text-[12px] leading-4 text-[#6b7487] tabular-nums">
-          Showing {sortedIssues.length} of {issues.length} tickets
-        </span>
       </div>
 
       {/* Queue Cards */}
       {sortedIssues.length === 0 ? (
-        <div className="rounded-[12px] border border-[#111827]/[0.08] bg-[#ffffff] p-10 text-center text-[14px] leading-5 text-[#4b5565]">
-          No tickets match this filter in the {dept} department queue
+        <div className="surface-card rounded-[14px] p-10 text-center text-[14px] text-[#525252]">
+          No tickets in this view
         </div>
       ) : (
         <div className="space-y-3">
-          {sortedIssues.map((issue) => {
+          {sortedIssues.map((issue, idx) => {
             const pb = issue.priorityBreakdown;
             const vp = issue.votingProgress;
             const showBreakdown = !!expandedBreakdown[issue.id];
@@ -325,246 +260,247 @@ export function StaffQueueView({
               issue.locationId,
               issue.locationName
             );
+            const noteLen = staffNotes[issue.id]?.trim().length ?? 0;
 
             return (
-              <article
-                key={issue.id}
-                className={`rounded-[12px] border bg-[#ffffff] p-5 transition-colors duration-150 ease-craft ${
-                  isCritical
-                    ? "border-[#dc2626]/30"
-                    : "border-[#111827]/[0.08]"
-                }`}
-              >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-2 min-w-0 flex-1">
-                    {/* Signature detail: tabular mono priority tag + status + canonical room code */}
-                    <div className="flex flex-wrap items-center gap-2 text-[12px] leading-4">
-                      <span className="inline-flex items-center gap-1.5 rounded-[6px] bg-[#eceff4] px-2 py-1 font-mono font-medium text-[#111827] tabular-nums">
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${priorityDotColor(
-                            issue.priority
-                          )}`}
-                        />
-                        <span>
-                          {issue.priorityScore} ·{" "}
-                          {formatPriorityLabel(issue.priority)}
+              <StaggerCard key={issue.id} index={idx}>
+                <article
+                  className={`surface-card rounded-[12px] p-5 transition-colors duration-150 ease-craft hover:border-[#171717]/[0.14] ${
+                    isCritical ? "border-[#dc2626]/30" : ""
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex min-w-0 flex-1 items-start gap-4">
+                      {/* Priority plaque */}
+                      <div
+                        className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-[10px] border font-mono tabular-nums ${priorityScoreStyle(
+                          issue.priority
+                        )}`}
+                      >
+                        <span className="text-[15px] leading-none font-medium">
+                          {issue.priorityScore}
                         </span>
-                      </span>
-
-                      <span className="inline-flex items-center rounded-[6px] border border-[#111827]/[0.08] bg-[#ffffff] px-2 py-1 text-[#4b5565]">
-                        {formatStatusLabel(issue.status)}
-                      </span>
-
-                      <span className="inline-flex items-center gap-1.5 rounded-[6px] bg-[#f5f7fa] px-2 py-1 font-mono text-[#4b5565]">
-                        <span className="font-medium text-[#111827]">
-                          {roomCode}
+                        <span className="mt-0.5 text-[9px] leading-none opacity-80">
+                          {formatPriorityLabel(issue.priority).slice(0, 4)}
                         </span>
-                        <span className="text-[#6b7487]">·</span>
-                        <span className="font-sans">{issue.locationName}</span>
-                      </span>
+                      </div>
 
-                      <span className="font-mono text-[#6b7487] tabular-nums">
-                        {issue.meTooCount} supporter
-                        {issue.meTooCount === 1 ? "" : "s"}
-                      </span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-[15px] leading-[22px] font-medium text-[#171717]">
+                          {issue.cleanSummary}
+                        </h3>
 
-                      {issue.reopenCount > 0 && (
-                        <span className="font-mono font-medium text-[#dc2626] tabular-nums">
-                          Reopened {issue.reopenCount}x
-                        </span>
-                      )}
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-4 text-[#737373]">
+                          <span className="inline-flex items-center gap-1.5 text-[#525252]">
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${statusDotColor(
+                                issue.status
+                              )}`}
+                            />
+                            <span>{formatStatusLabel(issue.status)}</span>
+                          </span>
+
+                          <span className="font-mono text-[#171717]">
+                            {roomCode}
+                            <span className="ml-1.5 font-sans text-[#737373]">
+                              {issue.locationName}
+                            </span>
+                          </span>
+
+                          <span className="font-mono tabular-nums">
+                            {issue.meTooCount}{" "}
+                            {issue.meTooCount === 1 ? "supporter" : "supporters"}
+                          </span>
+
+                          {issue.reopenCount > 0 && (
+                            <span className="font-mono font-medium text-[#dc2626] tabular-nums">
+                              Reopened {issue.reopenCount}x
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="mt-2 text-[13px] leading-5 text-[#525252]">
+                          {stripTrailingPeriod(issue.oneLineReason)}
+                        </p>
+                      </div>
                     </div>
 
-                    <h3 className="text-[15px] leading-[22px] font-medium text-[#111827]">
-                      {issue.cleanSummary}
-                    </h3>
-                    <p className="text-[13px] leading-5 text-[#4b5565]">
-                      {issue.oneLineReason}
-                    </p>
-                  </div>
-
-                  {/* 1-Click Staff Status Actions (all 36px tall, 8px radius, 16px icons) */}
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      disabled={isBusy || issue.status === "IN_PROGRESS"}
-                      onClick={() =>
-                        onUpdateStatus(
-                          issue.id,
-                          "IN_PROGRESS",
-                          staffNotes[issue.id]?.trim() || undefined
-                        )
-                      }
-                      className="inline-flex h-9 items-center gap-2 rounded-[8px] border border-[#111827]/[0.08] bg-[#eceff4] px-3 text-[13px] leading-5 font-medium text-[#111827] hover:bg-[#e2e6ee] disabled:cursor-not-allowed disabled:opacity-45 transition-colors duration-150 ease-craft"
-                    >
-                      <PlayCircle
-                        className="h-4 w-4 text-[#4b5565]"
-                        strokeWidth={1.5}
-                      />
-                      <span>In progress</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={
-                        isBusy ||
-                        issue.status === "RESOLVED" ||
-                        issue.status === "VERIFIED_RESOLVED" ||
-                        (staffNotes[issue.id]?.trim().length ?? 0) < 3
-                      }
-                      title={
-                        (staffNotes[issue.id]?.trim().length ?? 0) < 3
-                          ? "Enter a resolution note below (at least 3 characters) before marking resolved"
-                          : "Mark ticket resolved for student verification"
-                      }
-                      onClick={() =>
-                        onUpdateStatus(
-                          issue.id,
-                          "RESOLVED",
-                          staffNotes[issue.id]?.trim() || undefined
-                        )
-                      }
-                      className="inline-flex h-9 items-center gap-2 rounded-[8px] bg-[#1d4ed8] px-3 text-[13px] leading-5 font-medium text-[#ffffff] hover:bg-[#1e40af] disabled:cursor-not-allowed disabled:opacity-45 transition-colors duration-150 ease-craft"
-                    >
-                      <CheckCircle2 className="h-4 w-4" strokeWidth={1.5} />
-                      <span>Mark resolved</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isBusy || issue.status === "DISMISSED_SPAM"}
-                      onClick={() =>
-                        onUpdateStatus(
-                          issue.id,
-                          "DISMISSED_SPAM",
-                          staffNotes[issue.id]?.trim() || undefined
-                        )
-                      }
-                      className="inline-flex h-9 items-center gap-2 rounded-[8px] border border-[#111827]/[0.08] bg-[#ffffff] px-3 text-[13px] leading-5 font-normal text-[#dc2626] hover:bg-[#dc2626]/[0.06] disabled:cursor-not-allowed disabled:opacity-45 transition-colors duration-150 ease-craft"
-                    >
-                      <Ban className="h-4 w-4" strokeWidth={1.5} />
-                      <span>Dismiss spam (-20)</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Staff Note + Voting Progress + Breakdown Toggle */}
-                <div className="mt-4 flex flex-col gap-3 border-t border-[#111827]/[0.08] pt-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex flex-1 flex-wrap items-center gap-2">
-                    <input
-                      type="text"
-                      value={staffNotes[issue.id] ?? ""}
-                      onChange={(e) =>
-                        setStaffNotes((prev) => ({
-                          ...prev,
-                          [issue.id]: e.target.value,
-                        }))
-                      }
-                      placeholder="Resolution note (required to mark resolved, min 3 characters)"
-                      className="h-8 min-w-[240px] flex-1 rounded-[8px] border border-[#111827]/[0.08] bg-[#f5f7fa] px-3 text-[13px] leading-5 text-[#111827] placeholder:text-[#6b7487] focus:bg-[#ffffff]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedBreakdown((prev) => ({
-                          ...prev,
-                          [issue.id]: !prev[issue.id],
-                        }))
-                      }
-                      className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#111827]/[0.08] bg-[#ffffff] px-3 text-[13px] leading-5 font-normal text-[#4b5565] hover:bg-[#f5f7fa] hover:text-[#111827] transition-colors duration-150 ease-craft"
-                    >
-                      <Info
-                        className="h-4 w-4 text-[#6b7487]"
-                        strokeWidth={1.5}
-                      />
-                      <span>Evidence &amp; votes</span>
-                      {showBreakdown ? (
-                        <ChevronUp
-                          className="h-4 w-4 text-[#6b7487]"
+                    {/* 1-Click Actions */}
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={isBusy || issue.status === "IN_PROGRESS"}
+                        onClick={() =>
+                          onUpdateStatus(
+                            issue.id,
+                            "IN_PROGRESS",
+                            staffNotes[issue.id]?.trim() || undefined
+                          )
+                        }
+                        className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#171717]/[0.1] bg-[#ffffff] px-3 text-[13px] font-medium text-[#171717] hover:bg-[#f3f3f2] disabled:cursor-not-allowed disabled:opacity-40 press-tactile"
+                      >
+                        <PlayCircle
+                          className="h-3.5 w-3.5 text-[#525252]"
                           strokeWidth={1.5}
                         />
-                      ) : (
+                        <span>In progress</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={
+                          isBusy ||
+                          issue.status === "RESOLVED" ||
+                          issue.status === "VERIFIED_RESOLVED" ||
+                          noteLen < 3
+                        }
+                        title={
+                          noteLen < 3
+                            ? "Add a resolution note below first"
+                            : "Mark resolved"
+                        }
+                        onClick={() =>
+                          onUpdateStatus(
+                            issue.id,
+                            "RESOLVED",
+                            staffNotes[issue.id]?.trim() || undefined
+                          )
+                        }
+                        className="inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-[#171717] px-3 text-[13px] font-medium text-[#ffffff] shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-[#262626] disabled:cursor-not-allowed disabled:opacity-35 press-tactile"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        <span>Resolve</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isBusy || issue.status === "DISMISSED_SPAM"}
+                        onClick={() =>
+                          onUpdateStatus(
+                            issue.id,
+                            "DISMISSED_SPAM",
+                            staffNotes[issue.id]?.trim() || undefined
+                          )
+                        }
+                        className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#171717]/[0.09] bg-[#ffffff] px-3 text-[13px] text-[#dc2626] hover:bg-[#dc2626]/[0.06] disabled:cursor-not-allowed disabled:opacity-40 press-tactile"
+                      >
+                        <Ban className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        <span>Spam</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Resolution Note + Details Toggle */}
+                  <div className="mt-4 flex flex-col gap-3 border-t border-[#171717]/[0.07] pt-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-1 flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        value={staffNotes[issue.id] ?? ""}
+                        onChange={(e) =>
+                          setStaffNotes((prev) => ({
+                            ...prev,
+                            [issue.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="Add resolution note (required to resolve)"
+                        className="h-8 min-w-[220px] flex-1 rounded-[8px] border border-[#171717]/[0.09] bg-[#fafafa] px-3 text-[13px] leading-5 text-[#171717] placeholder:text-[#737373] focus:border-[#0f766e]/50 focus:bg-[#ffffff] focus:outline-none transition-colors duration-150"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedBreakdown((prev) => ({
+                            ...prev,
+                            [issue.id]: !prev[issue.id],
+                          }))
+                        }
+                        className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#171717]/[0.09] bg-[#ffffff] px-2.5 text-[12px] font-medium text-[#525252] hover:bg-[#f3f3f2] hover:text-[#171717] press-tactile"
+                      >
+                        <span>Details</span>
                         <ChevronDown
-                          className="h-4 w-4 text-[#6b7487]"
+                          className={`h-3.5 w-3.5 text-[#737373] transition-transform duration-150 ${
+                            showBreakdown ? "rotate-180" : ""
+                          }`}
                           strokeWidth={1.5}
                         />
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-[12px] leading-4 text-[#6b7487] tabular-nums">
-                    <span className="font-mono">
-                      Confirm {vp.confirmWeight.toFixed(2)} · Dispute{" "}
-                      {vp.disputeWeight.toFixed(2)} /{" "}
-                      {vp.reopenThreshold.toFixed(2)}
-                    </span>
-                    <span className="font-mono">{formatTime(issue.updatedAt)}</span>
-                  </div>
-                </div>
-
-                {showBreakdown && (
-                  <div className="mt-3 space-y-3 rounded-[8px] border border-[#111827]/[0.08] bg-[#f5f7fa] p-4 text-[13px] leading-5 text-[#4b5565]">
-                    <div className="grid gap-3 sm:grid-cols-4">
-                      <div className="rounded-[6px] border border-[#111827]/[0.08] bg-[#ffffff] p-3">
-                        <div className="text-[12px] leading-4 text-[#6b7487]">
-                          Impact / safety
-                        </div>
-                        <div className="mt-1 font-mono font-medium text-[#111827] tabular-nums">
-                          {pb.isSafetyHazard
-                            ? `Safety (${pb.hazardType.replaceAll("_", " ")})`
-                            : `${pb.factualImpact.replaceAll("_", " ")} (Base ${
-                                pb.baseScore
-                              })`}
-                        </div>
-                      </div>
-                      <div className="rounded-[6px] border border-[#111827]/[0.08] bg-[#ffffff] p-3">
-                        <div className="text-[12px] leading-4 text-[#6b7487]">
-                          Crowd weight
-                        </div>
-                        <div className="mt-1 font-mono font-medium text-[#111827] tabular-nums">
-                          {pb.effectiveCrowdWeight.toFixed(2)} (+{pb.crowdBonus})
-                        </div>
-                      </div>
-                      <div className="rounded-[6px] border border-[#111827]/[0.08] bg-[#ffffff] p-3">
-                        <div className="text-[12px] leading-4 text-[#6b7487]">
-                          Eligible voters
-                        </div>
-                        <div className="mt-1 font-mono font-medium text-[#111827] tabular-nums">
-                          {vp.eligibleCount} ({vp.eligibleWeight.toFixed(2)} wt)
-                        </div>
-                      </div>
-                      <div className="rounded-[6px] border border-[#111827]/[0.08] bg-[#ffffff] p-3">
-                        <div className="text-[12px] leading-4 text-[#6b7487]">
-                          Ticket ID
-                        </div>
-                        <div className="mt-1 font-mono font-medium text-[#111827]">
-                          {issue.id}
-                        </div>
-                      </div>
+                      </button>
                     </div>
-                    {pb.safetyQuote && (
-                      <div className="rounded-[6px] border border-[#dc2626]/20 bg-[#ffffff] px-3 py-2 text-[12px] leading-4 text-[#111827]">
-                        <span className="font-medium text-[#dc2626]">
-                          Verified safety quote:
-                        </span>{" "}
-                        &quot;{pb.safetyQuote}&quot;
-                      </div>
-                    )}
-                    {issue.adminNotes.length > 0 && (
-                      <div className="rounded-[6px] border border-[#111827]/[0.08] bg-[#ffffff] px-3 py-2 text-[12px] leading-4">
-                        <span className="font-medium text-[#111827]">
-                          Audit log:
-                        </span>{" "}
-                        {issue.adminNotes.join(" · ")}
-                      </div>
-                    )}
+
+                    <div className="flex items-center gap-3 font-mono text-[11px] text-[#737373] tabular-nums">
+                      <span>
+                        Confirm {vp.confirmWeight.toFixed(2)} · Dispute{" "}
+                        {vp.disputeWeight.toFixed(2)}/{vp.reopenThreshold.toFixed(2)}
+                      </span>
+                      <span>{formatTime(issue.updatedAt)}</span>
+                    </div>
                   </div>
-                )}
-              </article>
+
+                  <RevealPanel open={showBreakdown}>
+                    <div className="mt-3 space-y-3 rounded-[10px] border border-[#171717]/[0.07] bg-[#fafafa] p-4 text-[13px]">
+                      <div className="grid gap-3 sm:grid-cols-4">
+                        <div className="rounded-[8px] border border-[#171717]/[0.06] bg-[#ffffff] p-3">
+                          <div className="text-[11px] text-[#737373]">
+                            Impact
+                          </div>
+                          <div className="mt-1 font-mono text-[12px] font-medium text-[#171717]">
+                            {pb.isSafetyHazard
+                              ? pb.hazardType.replaceAll("_", " ")
+                              : `${pb.factualImpact.replaceAll("_", " ")} (${
+                                  pb.baseScore
+                                })`}
+                          </div>
+                        </div>
+                        <div className="rounded-[8px] border border-[#171717]/[0.06] bg-[#ffffff] p-3">
+                          <div className="text-[11px] text-[#737373]">
+                            Crowd weight
+                          </div>
+                          <div className="mt-1 font-mono text-[12px] font-medium text-[#171717] tabular-nums">
+                            {pb.effectiveCrowdWeight.toFixed(2)} (+
+                            {pb.crowdBonus})
+                          </div>
+                        </div>
+                        <div className="rounded-[8px] border border-[#171717]/[0.06] bg-[#ffffff] p-3">
+                          <div className="text-[11px] text-[#737373]">
+                            Eligible voters
+                          </div>
+                          <div className="mt-1 font-mono text-[12px] font-medium text-[#171717] tabular-nums">
+                            {vp.eligibleCount} ({vp.eligibleWeight.toFixed(2)} wt)
+                          </div>
+                        </div>
+                        <div className="rounded-[8px] border border-[#171717]/[0.06] bg-[#ffffff] p-3">
+                          <div className="text-[11px] text-[#737373]">
+                            Ticket ID
+                          </div>
+                          <div className="mt-1 font-mono text-[12px] font-medium text-[#171717]">
+                            {issue.id}
+                          </div>
+                        </div>
+                      </div>
+
+                      {pb.safetyQuote && (
+                        <div className="rounded-[8px] border border-[#dc2626]/20 bg-[#ffffff] px-3 py-2 text-[12px] text-[#171717]">
+                          <span className="font-medium text-[#dc2626]">
+                            Safety quote:
+                          </span>{" "}
+                          &quot;{pb.safetyQuote}&quot;
+                        </div>
+                      )}
+
+                      {issue.adminNotes.length > 0 && (
+                        <div className="rounded-[8px] border border-[#171717]/[0.06] bg-[#ffffff] px-3 py-2 text-[12px] text-[#525252]">
+                          <span className="font-medium text-[#171717]">
+                            Log:
+                          </span>{" "}
+                          {issue.adminNotes.join(" · ")}
+                        </div>
+                      )}
+                    </div>
+                  </RevealPanel>
+                </article>
+              </StaggerCard>
             );
           })}
         </div>
       )}
-    </div>
+    </SectionStage>
   );
 }

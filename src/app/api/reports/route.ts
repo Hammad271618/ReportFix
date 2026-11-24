@@ -9,6 +9,7 @@ import {
 import { resolveCampusLocation } from "@/lib/campus-registry";
 import {
   adjustTrustScore,
+  isPersonalNonFacilityIssue,
   preScreenRawText,
   sanitizePublicSummary,
   shouldPenalizePromptInjection,
@@ -337,12 +338,17 @@ export async function POST(req: Request) {
 
     if (preparedItems.length === 0) {
       const isInjectionOnly = injectionPenalized || injectionDetected;
+      const isPersonalRejected =
+        !isInjectionOnly &&
+        (extracted.rejectedPersonalIssue || isPersonalNonFacilityIssue(text));
       const rejectedTrace: TriageItemTrace = {
         itemIndex: 0,
         outcome: isInjectionOnly ? "REJECTED_INJECTION" : "REJECTED_NO_ISSUE",
         cleanSummary: isInjectionOnly
           ? "Prompt-injection submission rejected (no valid campus issue found)."
-          : "No actionable campus issue was found in this submission.",
+          : isPersonalRejected
+          ? "Personal non-facility issues are not accepted. Only fixable campus facility issues or harassment/bullying reports can be submitted."
+          : "No actionable campus issue was found in this submission. Only fixable facility issues or harassment/bullying reports are accepted.",
         aiExtracted: {
           category: "other",
           factualImpact: "minor",
@@ -367,6 +373,8 @@ export async function POST(req: Request) {
           items: [rejectedTrace],
           message: injectionPenalized
             ? "Prompt-injection attempt blocked (-15 trust)."
+            : isPersonalRejected
+            ? "Personal issue rejected — only fixable facility issues or harassment/bullying reports are accepted."
             : "No actionable campus issue found in submission.",
         },
       };

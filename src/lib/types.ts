@@ -200,6 +200,7 @@ export interface AIExtractionResult {
   aiDetectedRuleOverride: boolean;
   aiDetectedPriorityHijack: boolean;
   usedFallback: boolean;
+  rejectedPersonalIssue?: boolean;
 }
 
 export interface TriageItemTrace {
