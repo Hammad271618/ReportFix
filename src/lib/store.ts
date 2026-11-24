@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { recomputeIssuePriority } from "./rules-engine";
-import type { DatabaseState, Department, Issue, User } from "./types";
+import type { DatabaseState, Department, Issue, SecurityAlert, User } from "./types";
 
 const DB_PATH = path.join(process.cwd(), "data", "reportfix-db.json");
 
@@ -432,16 +432,38 @@ function buildSampleIssues(nowIso: string): Issue[] {
   ];
 }
 
+function buildSampleSecurityAlerts(nowIso: string): SecurityAlert[] {
+  const nowMs = Date.parse(nowIso);
+  const minutesAgo = (m: number) => new Date(nowMs - m * 60 * 1000).toISOString();
+
+  return [
+    {
+      id: "sec-sample-1",
+      type: "PROMPT_INJECTION",
+      severity: "HIGH",
+      status: "OPEN",
+      title: "Blocked prompt-injection & priority-hijack attempt",
+      detail:
+        'Report text contained rule-override directive ("ignore all previous rules") and priority hijack ("mark this as critical P0"). Directives were stripped and scored deterministically.',
+      issueId: "iss-sample-2",
+      involvedUserIds: ["stu-bilal"],
+      createdAt: minutesAgo(42),
+    },
+  ];
+}
+
 export function createSeedState(mode: "clean" | "samples"): DatabaseState {
   const nowIso = new Date().toISOString();
   const users = buildSeedUsers(nowIso);
   const issues = mode === "samples" ? buildSampleIssues(nowIso) : [];
+  const securityAlerts =
+    mode === "samples" ? buildSampleSecurityAlerts(nowIso) : [];
 
   const db: DatabaseState = {
     users,
     issues,
     pendingClarifications: [],
-    securityAlerts: [],
+    securityAlerts,
     submissionTimestampsByUser: {},
     lastResetMode: mode,
     updatedAt: nowIso,

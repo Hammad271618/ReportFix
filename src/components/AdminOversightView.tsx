@@ -12,6 +12,7 @@ import {
   X,
   ClipboardList,
   ArrowUpRight,
+  ShieldAlert,
 } from "lucide-react";
 import {
   DEPARTMENTS,
@@ -76,6 +77,7 @@ interface AdminOversightViewProps {
     alertId: string,
     decision: "confirm" | "dismiss"
   ) => Promise<void>;
+  onSimulateAttack: () => Promise<void>;
   onGenerateSummary: () => Promise<void>;
 }
 
@@ -92,6 +94,7 @@ export function AdminOversightView({
   onUpdateStatus,
   onOverrideIssue,
   onResolveBrigade,
+  onSimulateAttack,
   onGenerateSummary,
 }: AdminOversightViewProps) {
   const [deptFilter, setDeptFilter] = useState<string>("ALL");
@@ -854,13 +857,28 @@ export function AdminOversightView({
       {/* SECTION 3: SECURITY */}
       {activeSection === "security" && (
         <div className="space-y-6">
-          <div>
-            <h1 className="text-[28px] leading-[1.15] font-medium tracking-[-0.02em] text-[#171717]">
-              Security
-            </h1>
-            <p className="mt-1 text-[14px] leading-5 text-[#525252]">
-              Brigade bursts and blocked prompt-injection attempts
-            </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-[28px] leading-[1.15] font-medium tracking-[-0.02em] text-[#171717]">
+                Security
+              </h1>
+              <p className="mt-1 text-[14px] leading-5 text-[#525252]">
+                Brigade bursts and blocked prompt-injection attempts
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={onSimulateAttack}
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[8px] border border-[#b45309]/30 bg-[#fffbeb] px-3.5 text-[13px] font-medium text-[#b45309] hover:bg-[#fef3c7] disabled:opacity-50 press-tactile"
+            >
+              <ShieldAlert className="h-4 w-4" strokeWidth={1.6} />
+              <span>
+                {busyAction === "simulate-attack"
+                  ? "Simulating..."
+                  : "Simulate security attack"}
+              </span>
+            </button>
           </div>
 
           {securityAlerts.length === 0 ? (

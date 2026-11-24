@@ -579,6 +579,38 @@ export default function HomePage() {
     }
   };
 
+  const handleSimulateAttack = async () => {
+    if (!clientState) return;
+    setBusyAction("simulate-attack");
+    try {
+      const res = await fetch("/api/admin/simulate-attack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ userId: clientState.activeUser.id }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        message?: string;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "Failed to simulate attack");
+      }
+      await fetchState(clientState.activeUser.id);
+      showToast(
+        "success",
+        data.message || "Simulated security attack logged"
+      );
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Failed to simulate attack"
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   const handleGenerateSummary = async () => {
     if (!clientState) return;
     setBusyAction("admin-summary");
@@ -787,6 +819,7 @@ export default function HomePage() {
               onUpdateStatus={handleUpdateStatus}
               onOverrideIssue={handleOverrideIssue}
               onResolveBrigade={handleResolveBrigade}
+              onSimulateAttack={handleSimulateAttack}
               onGenerateSummary={handleGenerateSummary}
             />
           )}
